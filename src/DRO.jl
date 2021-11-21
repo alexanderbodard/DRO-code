@@ -24,6 +24,6 @@ s = rand()*f(x) # TODO: Fix edge case where rand() returns 0
         local g_ub = 1.
         local tol = 1e-4
 
-        proj_FT!(g_lb, g_ub, tol, f)
+        proj_FT!(x, s, g_lb, g_ub, tol, f)
     end
 end

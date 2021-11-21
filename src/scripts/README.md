@@ -1,0 +1,1 @@
+This folder contains some scripts, separate from the project

@@ -16,10 +16,17 @@ function bisection_method!(g_lb, g_ub, tol, func)
             g_lb = g_new
         end
     end
+    return (g_lb + g_ub) / 2.
 end
 
-function proj_FT!(g_lb, g_ub, tol, func)
-    bisection_method!(g_lb, g_ub, tol, func)
+function proj_FT!(x, s, g_lb, g_ub, tol, func)
+    # TODO: Find out whether to use pass by value or pass by reference in Julia
 
-    # TODO
+    if func(x) <= s
+        return x, s # Return copy or same object?
+    else
+        g = bisection_method!(g_lb, g_ub, tol, func)
+        p, l_value = ProximalOperators.prox(func, x, g)
+        return p, s + g
+    end
 end
