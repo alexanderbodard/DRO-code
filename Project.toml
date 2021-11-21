@@ -1,0 +1,7 @@
+name = "DRO"
+uuid = "991b5594-9ef1-47c5-844b-85044ff68091"
+authors = ["Alexander <alexander.bodard@student.kuleuven.be>"]
+version = "0.1.0"
+
+[deps]
+ProximalOperators = "a725b495-10eb-56fe-b38b-717eba820537"
