@@ -241,4 +241,4 @@ add_risk_epi_constraint(model, r, z[1:3])
 ###
 
 optimize!(model)
-println(value.(z_T))
+println(value.(z))
