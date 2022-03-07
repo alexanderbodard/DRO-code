@@ -42,7 +42,7 @@ Struct that represents a scenario tree.
     - node_info: All relevant information, indexable by the node index
     - n_x: Number of components of a state vector in a single node
     - n_u: Number of components of an input vector in a single node
-    - N: Total number of nodes in this scenario tree
+    - n: Total number of nodes in this scenario tree
 """
 struct ScenarioTree
     child_mapping :: Dict{Int64, Vector{Int64}}
@@ -52,6 +52,9 @@ struct ScenarioTree
     n_u :: Int64
     n :: Int64
     n_non_leaf_nodes :: Int64
+    leaf_node_min_index :: Int64
+    leaf_node_max_index :: Int64
+    min_index_per_timestep :: Vector{Int64}
 end
 
 function node_to_x(scen_tree :: ScenarioTree, i :: Int64)
@@ -64,6 +67,15 @@ function node_to_u(scen_tree :: ScenarioTree, i :: Int64)
     return collect(
         (i - 1) * scen_tree.n_u + 1 : i * scen_tree.n_u
     )
+end
+
+function node_to_timestep(scen_tree :: ScenarioTree, i :: Int64)
+    for j = 1:length(scen_tree.min_index_per_timestep)
+        if (i < scen_tree.min_index_per_timestep[j])
+            return j - 1
+        end
+    end
+    return length(scen_tree.min_index_per_timestep)
 end
 
 ###
@@ -90,7 +102,7 @@ end
 function impose_dynamics(model :: Model, scen_tree :: ScenarioTree, dynamics :: Dynamics)
     @constraint(
         model,
-        dynamics[i=2:scen_tree.n], # Non-root nodes
+        dynamics[i=2:scen_tree.n], # Non-root nodes, so all except i = 1
         x[
             node_to_x(scen_tree, i)
         ] .== 
@@ -115,8 +127,26 @@ struct Cost
     R :: Vector{Matrix{Float64}}
 end
 
-function get_all_scenario_paths()
-# TODO
+function get_scenario_cost(scen_tree :: ScenarioTree, cost :: Cost, node :: Int64)
+    # No input for leaf nodes!
+    res = x[node_to_x(scen_tree, node)]' * cost.Q[node_to_timestep(scen_tree, node)] * x[node_to_x(scen_tree, node)]
+
+    while node != 1
+        node = scen_tree.anc_mapping[node]
+        res += x[node_to_x(scen_tree, node)]' * cost.Q[node_to_timestep(scen_tree, node)] * x[node_to_x(scen_tree, node)] 
+            + u[node_to_u(scen_tree, node)]' * cost.R[node_to_timestep(scen_tree, node)] * u[node_to_u(scen_tree, node)]
+    end
+    return res 
+end
+
+function impose_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Cost)
+    # Could be more efficient by checking which indices have already been 
+    # computed, but this function is called only once during the build step.
+    @constraint(
+        model,
+        cost[i= scen_tree.leaf_node_min_index : scen_tree.leaf_node_max_index], # Only leaf nodes
+        get_scenario_cost(scen_tree, cost, i) <= 1#s[scen_tree.anc_mapping[i]]
+    )
 end
 
 ##########################
@@ -155,7 +185,10 @@ scen_tree = ScenarioTree(
     2,
     1,
     7,
-    3
+    3,
+    4,
+    7,
+    [1, 2, 4]
 )
 
 # Dynamics: Based on a discretized car model
@@ -166,6 +199,18 @@ d = 2
 A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
 B = [reshape([0., T_s], :, 1) for _ in 1:d]
 dynamics = Dynamics(A, B, n_x, n_u)
+
+# Cost: Let's take a quadratic cost, equal at all timesteps
+Q = LA.Matrix([2.2 0; 0 3.7])
+R = reshape([3.2], 1, 1)
+cost = Cost(
+    collect([
+        Q for _ in 1:3
+    ]),
+    collect([
+        R for _ in 1:3
+    ])
+)
 
 ###
 # Formulate the optimization problem
@@ -182,7 +227,7 @@ set_silent(model)
 @objective(model, Min, s[1])
 
 # Impose cost
-
+impose_cost(model, scen_tree, cost)
 
 # Impose dynamics
 impose_dynamics(model, scen_tree, dynamics)
