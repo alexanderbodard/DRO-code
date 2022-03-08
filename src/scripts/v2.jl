@@ -108,8 +108,8 @@ function impose_dynamics(model :: Model, scen_tree :: ScenarioTree, dynamics :: 
         x[
             node_to_x(scen_tree, i)
         ] .== 
-            dynamics.A[scen_tree.node_info[i].w] * node_to_x(scen_tree, scen_tree.anc_mapping[i]) 
-            + dynamics.B[scen_tree.node_info[i].w] * node_to_u(scen_tree, scen_tree.anc_mapping[i])
+            dynamics.A[scen_tree.node_info[i].w] * x[node_to_x(scen_tree, scen_tree.anc_mapping[i])]
+            + dynamics.B[scen_tree.node_info[i].w] * u[node_to_u(scen_tree, scen_tree.anc_mapping[i])]
     )
 end
 
@@ -177,27 +177,42 @@ end
 #     return in(r.A' * x_next + r.B' * y , r.C.subcones[1])
 # end
 
-function add_risk_epi_constraint(model::Model, r::Riskmeasure, x_current, x_next::Vector)
+function add_risk_epi_constraint(model::Model, r::Riskmeasure, x_current, x_next::Vector, y)
     # TODO: Naming of the dual variables
-    y = @variable(model, [1:length(r.b)])
+    # y = @variable(model, [1:length(r.b)])
 
     # 2b
     @constraint(model, in(r.A' * x_next + r.B' * y , r.C.subcones[1]))
     # 2c
     @constraint(model, in(y, r.D.subcones[1]))
     # 2d
-    @constraint(model, - LA.dot(r.b, y) <= x_current)
+    @constraint(model, - r.b' * y <= x_current)
+
+    # @constraint(model, -2 * y[1] - 3 * y[2] <= x_current)
+    # println(r.b)
+    # @constraint(model, -5 <= x_current)
+    # @constraint(model, y .>= 0)
 end
 
 function add_risk_epi_constraints(model::Model, scen_tree :: ScenarioTree, r::Vector{Riskmeasure})
+    n_y = length(r[1].b)
+    @variable(model, y[i=1:scen_tree.n_non_leaf_nodes * n_y])
+    
     for i = 1:scen_tree.n_non_leaf_nodes
         add_risk_epi_constraint(
             model,
             r[i],
             s[i],
-            s[scen_tree.child_mapping[i]]
+            s[scen_tree.child_mapping[i]],
+            y[(i - 1) * n_y + 1 : n_y * i]
         )
     end
+
+    # @constraint(
+    #     model,
+    #     risk[i = 1:scen_tree.n_non_leaf_nodes],
+
+    # )
 end
 
 ##########################
@@ -263,14 +278,20 @@ cost = Cost(
     ])
 )
 
-# Risk measures
+# Risk measures: Risk neutral: A = I, B = [I; -I], b = [1;1;-1;-1]
+"""
+Risk neutral: A = I, B = [I; -I], b = [1;1;-1;-1]
+AVaR: A = I, B = [-I, I, 1^T, -1^T], b = [0; p / alpha; 1, -1]
+"""
 rms = [
     Riskmeasure(
         LA.I(2),
-        LA.I(2),
-        [3,2],
+        [LA.I(2); -LA.I(2)],
+        [1 , 1, -1, -1],
+        # [-LA.I(2); LA.I(2); ones(2, 2); -ones(2, 2)],
+        # [0, 0, 0.5 / 0.5, 0.5 / 0.5 , 1, 1, -1, -1],
         ConvexCone([MOI.Nonnegatives(2)]),
-        ConvexCone([MOI.Nonnegatives(2)])
+        ConvexCone([MOI.Nonnegatives(4)])
     ) for _ in 1:scen_tree.n_non_leaf_nodes
 ]
 
@@ -292,7 +313,7 @@ set_silent(model)
 impose_cost(model, scen_tree, cost)
 
 # Impose dynamics
-impose_dynamics(model, scen_tree, dynamics)
+# impose_dynamics(model, scen_tree, dynamics)
 
 # Impose risk measure epigraph constraints
 add_risk_epi_constraints(model, scen_tree, rms)
@@ -304,6 +325,7 @@ add_risk_epi_constraints(model, scen_tree, rms)
 println(model)
 
 optimize!(model)
-println(value.(s))
-println(value.(x))
-println(value.(u))
+# println(value.(s))
+# println(value.(x))
+# println(value.(u))
+solution_summary(model, verbose=true)
