@@ -19,14 +19,16 @@ Struct that stores all relevant information for some node of the scenario tree.
     - w: Represents the uncertainty in dynamics when going from the parent of the given
         node to the given node. This integer is used as an index to retrieve these dynamics
         from the Dynamics struct.
-    - s: Conditional risk measure index in this node, given the current node. Always a scalar!
+    - s: Non-leaf nodes: Conditional risk measure index in this node, given the current node. 
+         Leaf nodes: Index of the total cost of this scenario
+        Always a scalar!
 
 Not all of these variables are defined for all nodes of the scenario tree. In such case, nothing is returned.
 The above variables are defined for:
     - x: all nodes
     - u: non-leaf nodes
     - w: non-root nodes
-    - s: non-leaf nodes
+    - s: non-leaf nodes for risk measures values, leaf nodes for cost values of corresponding scenario
 """
 struct ScenarioTreeNodeInfo
     x :: Union{Vector{Int64}, Nothing}
@@ -145,8 +147,57 @@ function impose_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Cost)
     @constraint(
         model,
         cost[i= scen_tree.leaf_node_min_index : scen_tree.leaf_node_max_index], # Only leaf nodes
-        get_scenario_cost(scen_tree, cost, i) <= 1#s[scen_tree.anc_mapping[i]]
+        get_scenario_cost(scen_tree, cost, i) <= s[scen_tree.node_info[i].s]
     )
+end
+
+###
+# Risk constraints
+###
+
+struct ConvexCone
+    subcones:: Array{MOI.AbstractVectorSet}
+end
+
+abstract type AbstractRiskMeasure end 
+
+struct  Riskmeasure <: AbstractRiskMeasure
+    A:: Matrix{Float64}
+    B:: Matrix{Float64}
+    b:: Vector{Float64}
+    C:: ConvexCone
+    D:: ConvexCone
+end
+
+# """
+# x: primal vector (v, t) with v the argument, t the epigraph variable 
+# y: dual vector 
+# """ 
+# function in_epigraph(r:: Riskmeasure, x_next::Vector, y::Vector)
+#     return in(r.A' * x_next + r.B' * y , r.C.subcones[1])
+# end
+
+function add_risk_epi_constraint(model::Model, r::Riskmeasure, x_current, x_next::Vector)
+    # TODO: Naming of the dual variables
+    y = @variable(model, [1:length(r.b)])
+
+    # 2b
+    @constraint(model, in(r.A' * x_next + r.B' * y , r.C.subcones[1]))
+    # 2c
+    @constraint(model, in(y, r.D.subcones[1]))
+    # 2d
+    @constraint(model, - LA.dot(r.b, y) <= x_current)
+end
+
+function add_risk_epi_constraints(model::Model, scen_tree :: ScenarioTree, r::Vector{Riskmeasure})
+    for i = 1:scen_tree.n_non_leaf_nodes
+        add_risk_epi_constraint(
+            model,
+            r[i],
+            s[i],
+            s[scen_tree.child_mapping[i]]
+        )
+    end
 end
 
 ##########################
@@ -163,7 +214,7 @@ node_info = [
         collect((i - 1) * 2 + 1 : i * 2),
         i < 4 ? [i] : nothing,
         i > 1 ? (i % 2) + 1 : nothing,
-        i < 4 ? i : nothing
+        i,
     ) for i in collect(1:7)
 ]
 
@@ -212,6 +263,17 @@ cost = Cost(
     ])
 )
 
+# Risk measures
+rms = [
+    Riskmeasure(
+        LA.I(2),
+        LA.I(2),
+        [3,2],
+        ConvexCone([MOI.Nonnegatives(2)]),
+        ConvexCone([MOI.Nonnegatives(2)])
+    ) for _ in 1:scen_tree.n_non_leaf_nodes
+]
+
 ###
 # Formulate the optimization problem
 ###
@@ -222,7 +284,7 @@ set_silent(model)
 
 @variable(model, x[i=1:scen_tree.n * scen_tree.n_x])
 @variable(model, u[i=1:scen_tree.n_non_leaf_nodes * scen_tree.n_u])
-@variable(model, s[i=1:scen_tree.n_non_leaf_nodes * 1])
+@variable(model, s[i=1:scen_tree.n * 1])
 
 @objective(model, Min, s[1])
 
@@ -232,9 +294,16 @@ impose_cost(model, scen_tree, cost)
 # Impose dynamics
 impose_dynamics(model, scen_tree, dynamics)
 
+# Impose risk measure epigraph constraints
+add_risk_epi_constraints(model, scen_tree, rms)
+
 ###
 # Solve the optimization problem
 ###
 
+println(model)
+
 optimize!(model)
 println(value.(s))
+println(value.(x))
+println(value.(u))
