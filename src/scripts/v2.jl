@@ -142,7 +142,7 @@ function get_scenario_cost(scen_tree :: ScenarioTree, cost :: Cost, node :: Int6
 end
 
 function impose_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Cost)
-    # Could be more efficient by checking which indices have already been 
+    # TODO: Could be more efficient by checking which indices have already been 
     # computed, but this function is called only once during the build step.
     @constraint(
         model,
@@ -178,20 +178,12 @@ end
 # end
 
 function add_risk_epi_constraint(model::Model, r::Riskmeasure, x_current, x_next::Vector, y)
-    # TODO: Naming of the dual variables
-    # y = @variable(model, [1:length(r.b)])
-
     # 2b
-    @constraint(model, in(r.A' * x_next + r.B' * y , r.C.subcones[1]))
+    @constraint(model, in(-(r.A' * x_next + r.B' * y) , r.C.subcones[1]))
     # 2c
-    @constraint(model, in(y, r.D.subcones[1]))
+    @constraint(model, in(-y, r.D.subcones[1]))
     # 2d
     @constraint(model, - r.b' * y <= x_current)
-
-    # @constraint(model, -2 * y[1] - 3 * y[2] <= x_current)
-    # println(r.b)
-    # @constraint(model, -5 <= x_current)
-    # @constraint(model, y .>= 0)
 end
 
 function add_risk_epi_constraints(model::Model, scen_tree :: ScenarioTree, r::Vector{Riskmeasure})
@@ -207,12 +199,6 @@ function add_risk_epi_constraints(model::Model, scen_tree :: ScenarioTree, r::Ve
             y[(i - 1) * n_y + 1 : n_y * i]
         )
     end
-
-    # @constraint(
-    #     model,
-    #     risk[i = 1:scen_tree.n_non_leaf_nodes],
-
-    # )
 end
 
 ##########################
@@ -280,16 +266,14 @@ cost = Cost(
 
 # Risk measures: Risk neutral: A = I, B = [I; -I], b = [1;1;-1;-1]
 """
-Risk neutral: A = I, B = [I; -I], b = [1;1;-1;-1]
+Risk neutral: A = I, B = [I; -I], b = [0.5;0.5;-0.5;-0.5]
 AVaR: A = I, B = [-I, I, 1^T, -1^T], b = [0; p / alpha; 1, -1]
 """
 rms = [
     Riskmeasure(
         LA.I(2),
         [LA.I(2); -LA.I(2)],
-        [1 , 1, -1, -1],
-        # [-LA.I(2); LA.I(2); ones(2, 2); -ones(2, 2)],
-        # [0, 0, 0.5 / 0.5, 0.5 / 0.5 , 1, 1, -1, -1],
+        [0.5 , 0.5, -0.5, -0.5],
         ConvexCone([MOI.Nonnegatives(2)]),
         ConvexCone([MOI.Nonnegatives(4)])
     ) for _ in 1:scen_tree.n_non_leaf_nodes
@@ -309,11 +293,14 @@ set_silent(model)
 
 @objective(model, Min, s[1])
 
+# TODO: Initial condition
+@constraint(model, intial_condition[i=1:2], x[i] .== [2., 2.][i])
+
 # Impose cost
 impose_cost(model, scen_tree, cost)
 
 # Impose dynamics
-# impose_dynamics(model, scen_tree, dynamics)
+impose_dynamics(model, scen_tree, dynamics)
 
 # Impose risk measure epigraph constraints
 add_risk_epi_constraints(model, scen_tree, rms)
@@ -325,7 +312,4 @@ add_risk_epi_constraints(model, scen_tree, rms)
 println(model)
 
 optimize!(model)
-# println(value.(s))
-# println(value.(x))
-# println(value.(u))
 solution_summary(model, verbose=true)
