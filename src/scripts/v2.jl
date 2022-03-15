@@ -102,6 +102,9 @@ struct Dynamics
 end
 
 function impose_dynamics(model :: Model, scen_tree :: ScenarioTree, dynamics :: Dynamics)
+    x = model[:x]
+    u = model[:u]
+
     @constraint(
         model,
         dynamics[i=2:scen_tree.n], # Non-root nodes, so all except i = 1
@@ -129,7 +132,9 @@ struct Cost
     R :: Vector{Matrix{Float64}}
 end
 
-function get_scenario_cost(scen_tree :: ScenarioTree, cost :: Cost, node :: Int64)
+function get_scenario_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Cost, node :: Int64)
+    x = model[:x]
+    u = model[:u]
     # No input for leaf nodes!
     res = x[node_to_x(scen_tree, node)]' * cost.Q[node_to_timestep(scen_tree, node)] * x[node_to_x(scen_tree, node)]
 
@@ -147,7 +152,7 @@ function impose_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Cost)
     @constraint(
         model,
         cost[i= scen_tree.leaf_node_min_index : scen_tree.leaf_node_max_index], # Only leaf nodes
-        get_scenario_cost(scen_tree, cost, i) <= s[scen_tree.node_info[i].s]
+        get_scenario_cost(model, scen_tree, cost, i) <= model[:s][scen_tree.node_info[i].s]
     )
 end
 
@@ -169,14 +174,6 @@ struct  Riskmeasure <: AbstractRiskMeasure
     D:: ConvexCone
 end
 
-# """
-# x: primal vector (v, t) with v the argument, t the epigraph variable 
-# y: dual vector 
-# """ 
-# function in_epigraph(r:: Riskmeasure, x_next::Vector, y::Vector)
-#     return in(r.A' * x_next + r.B' * y , r.C.subcones[1])
-# end
-
 function add_risk_epi_constraint(model::Model, r::Riskmeasure, x_current, x_next::Vector, y)
     # 2b
     @constraint(model, in(-(r.A' * x_next + r.B' * y) , r.C.subcones[1]))
@@ -194,10 +191,64 @@ function add_risk_epi_constraints(model::Model, scen_tree :: ScenarioTree, r::Ve
         add_risk_epi_constraint(
             model,
             r[i],
-            s[i],
-            s[scen_tree.child_mapping[i]],
+            model[:s][i],
+            model[:s][scen_tree.child_mapping[i]],
             y[(i - 1) * n_y + 1 : n_y * i]
         )
+    end
+end
+
+###
+# Model
+###
+
+struct CustomModel
+    
+end
+
+@enum Solver begin
+    MOSEK_SOLVER = 1
+    CUSTOM_SOLVER = 2
+end
+
+function build_model(scen_tree :: ScenarioTree, solver :: Solver)
+    if solver == MOSEK_SOLVER
+        # Define model, primal variables, epigraph variables and objective
+        model = Model(Mosek.Optimizer)
+        set_silent(model)
+
+        @variable(model, x[i=1:scen_tree.n * scen_tree.n_x])
+        @variable(model, u[i=1:scen_tree.n_non_leaf_nodes * scen_tree.n_u])
+        @variable(model, s[i=1:scen_tree.n * 1])
+
+        @objective(model, Min, s[1])
+
+        # TODO: Initial condition
+        @constraint(model, intial_condition[i=1:2], x[i] .== [2., 2.][i])
+
+        # Impose cost
+        impose_cost(model, scen_tree, cost)
+
+        # Impose dynamics
+        impose_dynamics(model, scen_tree, dynamics)
+
+        # Impose risk measure epigraph constraints
+        add_risk_epi_constraints(model, scen_tree, rms)
+
+        return model
+    end
+    if solver == CUSTOM_SOLVER
+        return nothing
+    end
+end
+
+function solve_model(model :: Model, solver :: Solver)
+    if solver == MOSEK_SOLVER
+        optimize!(model)
+        solution_summary(model, verbose=true)
+    end
+    if solver == CUSTOM_SOLVER
+        return nothing
     end
 end
 
@@ -283,33 +334,10 @@ rms = [
 # Formulate the optimization problem
 ###
 
-# Define model, primal variables, epigraph variables and objective
-model = Model(Mosek.Optimizer)
-set_silent(model)
-
-@variable(model, x[i=1:scen_tree.n * scen_tree.n_x])
-@variable(model, u[i=1:scen_tree.n_non_leaf_nodes * scen_tree.n_u])
-@variable(model, s[i=1:scen_tree.n * 1])
-
-@objective(model, Min, s[1])
-
-# TODO: Initial condition
-@constraint(model, intial_condition[i=1:2], x[i] .== [2., 2.][i])
-
-# Impose cost
-impose_cost(model, scen_tree, cost)
-
-# Impose dynamics
-impose_dynamics(model, scen_tree, dynamics)
-
-# Impose risk measure epigraph constraints
-add_risk_epi_constraints(model, scen_tree, rms)
+model = build_model(scen_tree, MOSEK)
 
 ###
 # Solve the optimization problem
 ###
 
-println(model)
-
-optimize!(model)
-solution_summary(model, verbose=true)
+solve_model(model, MOSEK)
