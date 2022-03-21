@@ -1,67 +1,101 @@
-###
-# Main file for the eventual project
-###
-include("functions/proj_FT.jl")
-using ProximalOperators, LinearAlgebra, Random
+include("cost.jl")
+include("dynamics.jl")
+include("model.jl")
+include("risk_constraints.jl")
+include("scenario_tree.jl")
+
+using ProximalOperators, Random, JuMP, MosekTools, SparseArrays
+import MathOptInterface as MOI
+import MathOptSetDistances as MOD
+import LinearAlgebra as LA
 Random.seed!(1234)
 
-## Problem statement
+##########################
+# Mosek reference implementation
+##########################
 
-N = 20
-T = 10
-A = [Matrix(1.0I, N, N) for _ in 1:T-1]  #rand(N, N)
-A = map((x -> x' * x), A)
-b = [zeros(N) for _ in 1:T-1]
-x = rand(N)
-f = ProximalOperators.Quadratic(A[1], b[1])
-gamma = 0.2
-s = rand()*f(x) # TODO: Fix edge case where rand() returns 0
+###
+# Problem statement
+###
 
-# ## Project onto F_T
-# @time begin
-#     for _ in 1:100
-#         local g_lb = 1e-4 # TODO: How close to zero?
-#         local g_ub = 1.
-#         local tol = 1e-4
+# Scenario tree
+node_info = [
+    ScenarioTreeNodeInfo(
+        collect((i - 1) * 2 + 1 : i * 2),
+        i < 4 ? [i] : nothing,
+        i > 1 ? (i % 2) + 1 : nothing,
+        i,
+    ) for i in collect(1:7)
+]
 
-#         proj_FT!(x, s, g_lb, g_ub, tol, f)
-#     end
-# end
+scen_tree = ScenarioTree(
+    Dict(
+        1 => [2, 3], 
+        2 => [4, 5], 
+        3 => [6, 7],
+    ),
+    Dict(
+        2 => 1,
+        3 => 1,
+        4 => 2,
+        5 => 2,
+        6 => 3,
+        7 => 3,
+    ),
+    node_info,
+    2,
+    1,
+    7,
+    3,
+    4,
+    7,
+    [1, 2, 4]
+)
 
+# Dynamics: Based on a discretized car model
+T_s = 0.05
+n_x = 2
+n_u = 1
+d = 2
+A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
+B = [reshape([0., T_s], :, 1) for _ in 1:d]
+dynamics = Dynamics(A, B, n_x, n_u)
 
-M = 30
-N = 20
-x = rand(N)
-v = rand(M)
-sigma = Matrix(1.0I, M, M)
-gamma = Matrix(1.0I, N, N)
-lambda = rand()
-L = rand(M, N)
+# Cost: Let's take a quadratic cost, equal at all timesteps
+Q = LA.Matrix([2.2 0; 0 3.7])
+R = reshape([3.2], 1, 1)
+cost = Cost(
+    collect([
+        Q for _ in 1:3
+    ]),
+    collect([
+        R for _ in 1:3
+    ])
+)
 
-function grad_f()
-    return 5 * ones(N, 1)
-end
+# Risk measures: Risk neutral: A = I, B = [I; -I], b = [1;1;-1;-1]
+"""
+Risk neutral: A = I, B = [I; -I], b = [0.5;0.5;-0.5;-0.5]
+AVaR: A = I, B = [-I, I, 1^T, -1^T], b = [0; p / alpha; 1, -1]
+"""
+rms = [
+    Riskmeasure(
+        LA.I(2),
+        [LA.I(2); -LA.I(2)],
+        [0.5 , 0.5, -0.5, -0.5],
+        ConvexCone([MOI.Nonnegatives(2)]),
+        ConvexCone([MOI.Nonnegatives(4)])
+    ) for _ in 1:scen_tree.n_non_leaf_nodes
+]
 
-function prox_h_c(arg)
-    h = ProximalOperators.IndBallLinf(1.0)
-    a, b = ProximalOperators.prox(h, arg, sigma)
-    return a
-end
+###
+# Formulate the optimization problem
+###
 
-function eval_L(x)
-    return L*x
-end
+model = build_model(scen_tree, CUSTOM_SOLVER)
 
-function eval_Lp(x)
-    return L'*x
-end
+###
+# Solve the optimization problem
+###
 
-while true
-    xbar = x - gamma * eval_Lp(v) - gamma * grad_f()
-    vbar = prox_h_c(v + sigma * eval_L(2 * xbar - x))
-    global x = lambda * xbar + (1 - lambda) * x
-    global v = lambda * vbar + (1 - lambda) * v
-
-    println(x)
-    sleep(1)
-end
+solve_model(model, CUSTOM_SOLVER)
