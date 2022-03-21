@@ -1,3 +1,7 @@
+using JuMP
+
+include("scenario_tree.jl")
+
 ###
 # Cost
 ###
