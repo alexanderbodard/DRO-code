@@ -325,8 +325,8 @@ end
 function solve_model(model :: Union{Model, CustomModel}, solver :: Solver)
     if solver == MOSEK_SOLVER
         optimize!(model)
-        println(solution_summary(model, verbose=true))
-        return nothing
+        # println(solution_summary(model, verbose=true))
+        return value.(model[:x]), value.(model[:u])
     end
     if solver == CUSTOM_SOLVER
         solve_custom_model(model)

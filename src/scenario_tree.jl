@@ -100,3 +100,44 @@ function z_to_y(scen_tree :: ScenarioTree, n_y :: Int64)
         scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + scen_tree.n_non_leaf_nodes * n_y
     )
 end
+
+function plot_scen_tree_x_i(scen_tree :: ScenarioTree, x :: Vector{Float64}, i :: Int64, filename :: String)
+    pgfplotsx()
+
+    xs = [1]
+    ys = [0.]
+
+    parents = [1]
+    parent_height = Dict(1 => 2.)
+    parent_offset = Dict(1 => 1.)
+    while length(parents) > 0
+        parent = parents[1]
+        parents = parents[2:end]
+        children = scen_tree.child_mapping[parent]
+        println(parent, children)
+        for child in children
+            append!(xs, [node_to_timestep(scen_tree, child)])
+
+            parent_height[child] = parent_height[parent] / length(children)
+            parent_offset[child] = parent_offset[parent] - parent_height[child] * (child - minimum(children))
+            append!(ys, parent_offset[child] - parent_height[child] / 2 )
+        end
+        for child in children
+            if child < scen_tree.leaf_node_min_index
+                append!(parents, child)
+            end
+        end
+    end
+    
+    println(xs, ys)
+    scatter(xs, ys, fmt=:png, xlim = (0.6, length(scen_tree.min_index_per_timestep) + 2.2), ylim = (-1.1, 1.1), marker = (10, 0.2, :orange), series_annotations = text.(1:7), label="")
+    annotate!(collect(zip(xs .+ 0.1, ys, map(data -> (data[i], 16, :left), collect(eachrow(reshape(x, scen_tree.n_x, 7)'))))))
+    filename = string(filename, ".png")
+    savefig(filename)
+end
+
+function plot_scen_tree_x(scen_tree :: ScenarioTree, x :: Vector{Float64}, filename :: String)
+    for i = 1:scen_tree.n_x
+        plot_scen_tree_x_i(scen_tree, x, i, string(filename, "_", i))
+    end
+end
