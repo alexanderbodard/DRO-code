@@ -22,56 +22,25 @@ function primal_dual_alg(x, v, model :: CustomModel)
     - Sigma in S_{++}^{n_L}
     - Gamma in S_{++}^{n_z}
     """
-    sigma = rand() * 1e-3
-    gamma = rand() * 1e-3
+    sigma = 1e-6
+    gamma = 1e-6
     Sigma = rand() * sparse(LA.I(n_L))
     Gamma = rand() * sparse(LA.I(n_z))
-    lambda = 1
+    lambda = 0.5
 
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 5
+    while counter < 100
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
         vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma)
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
 
-        println(x)
-
         counter += 1
     end
+
+    return x
 end
-
-# function get_n_z(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
-#     if eliminate_states
-#         n_x = 0                             # Eliminate state variables
-#     else
-#         n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
-#     end
-
-#     return (scen_tree.n_non_leaf_nodes * scen_tree.n_u              # Every non leaf node has an input
-#                 + n_x                                               # n_x
-#                 + scen_tree.n                                       # s variable: 1 component per node
-#                 + scen_tree.n_non_leaf_nodes * length(rms[1].b))    # One y variable for each non leaf node
-# end
-
-# function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
-#     n_y = length(rms[1].b)
-#     if eliminate_states
-#         n_x = 0                             # Eliminate state variables
-#     else
-#         n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
-#     end
-
-#     n_L_rows = (size(rms[1].A)[2]    # 4a
-#                 + n_y                # 4b
-#                 + 1 + n_y)           # 4c
-#     n_cost_i = (n_x                                     # x0
-#         + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
-#         + 1)                                            # x_{T-1}[i]
-#     n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
-#     return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost
-# end
 
 function build_custom_model(scen_tree :: ScenarioTree, cost :: Cost, rms :: Vector{Riskmeasure}, z0, x0)
     eliminate_states = true
@@ -144,7 +113,13 @@ function solve_custom_model(model :: CustomModel)
     z = zeros(n_z)
     v = zeros(n_L)
 
-    primal_dual_alg(z, v, model)
+    z = primal_dual_alg(z, v, model)
+
+    return z[
+        1:scen_tree.n * scen_tree.n_x
+    ], z[
+        scen_tree.n * scen_tree.n_x + 1: scen_tree.n * scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u
+    ]    
 end
 
 @enum Solver begin
@@ -204,7 +179,6 @@ function solve_model(model :: Union{Model, CustomModel}, solver :: Solver)
         return nothing, nothing
     end
     if solver == H_X_SOLVER
-        solve_custom_model(model)
-        return nothing, nothing
+        return solve_custom_model(model)
     end
 end

@@ -101,6 +101,7 @@ module DRO
     ###
 
     x, u = solve_model(model, H_X_SOLVER)
+    println(x)
 
     # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")

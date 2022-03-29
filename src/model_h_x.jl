@@ -7,6 +7,10 @@ Func must be callable.
 g_lb and g_ub will be altered by calling this function.
 """
 function bisection_method!(g_lb, g_ub, tol, psi)
+    # while psi(g_lb)*psi(g_ub) > 0
+    #     g_ub *= 2
+    # end
+
     if psi(g_lb)*psi(g_ub) > 0
         error("Incorrect initial interval. Found $(psi(g_lb)) and $(psi(g_ub))")
     end
