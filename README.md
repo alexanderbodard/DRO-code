@@ -10,5 +10,5 @@ julia --project=..
 and then run the file you want to run, e.g.
 
 ```
-include("main.jl")
+include("DRO.jl")
 ```

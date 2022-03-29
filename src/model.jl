@@ -1,208 +1,85 @@
 include("risk_constraints.jl")
+include("custom_model.jl")
+include("model_h_x.jl")
 
 ###
 # Model
 ###
 
-struct CustomModel{T, TT, TTT, U}
-    L :: T
-    Ltrans :: TT
-    grad_f :: TTT
-    prox_hstar_Sigmainv :: U
-end
+# struct CustomModel{T, TT, TTT, U}
+#     L :: T
+#     Ltrans :: TT
+#     grad_f :: TTT
+#     prox_hstar_Sigmainv :: U
+# end
 
 function primal_dual_alg(x, v, model :: CustomModel)
-    n_y = length(rms[1].b)
-
-    n_z = (scen_tree.n_non_leaf_nodes * scen_tree.n_u       # Every node has an input
-                + n_x                                       # Only state at t=0
-                + scen_tree.n                               # s variable: 1 component per node
-                + scen_tree.n_non_leaf_nodes * n_y)         # One y variable for each non leaf node
-
-
-    n_L_rows = (size(rms[1].A)[2]    # 4a
-                + n_y               # 4b
-                + 1 + n_y)           # 4c
-    n_cost_i = (n_x                                     # x0
-        + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
-        + 1)                                            # x_{T-1}[i]
-    n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
-    n_L = scen_tree.n_non_leaf_nodes * n_L_rows + n_cost
+    n_z = length(x)
+    n_L = length(v)
 
     # TODO: Initialize Sigma and Gamma in some way
     """
     - Sigma in S_{++}^{n_L}
     - Gamma in S_{++}^{n_z}
     """
-    Sigma = sparse(LA.Diagonal(1:1:n_L))
-    Gamma = sparse(LA.Diagonal(1:1:n_z))
+    sigma = rand() * 1e-3
+    gamma = rand() * 1e-3
+    Sigma = rand() * sparse(LA.I(n_L))
+    Gamma = rand() * sparse(LA.I(n_z))
     lambda = 1
 
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 2
+    while counter < 5
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
-        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ Sigma)
+        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma)
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
+
+        println(x)
 
         counter += 1
     end
 end
 
-function build_custom_model(scen_tree :: ScenarioTree, cost :: Cost, rms :: Vector{Riskmeasure}, x0, u0, s0, y0)
-    n_y = length(rms[1].b)
+# function get_n_z(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
+#     if eliminate_states
+#         n_x = 0                             # Eliminate state variables
+#     else
+#         n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
+#     end
 
-    n_z = (scen_tree.n_non_leaf_nodes * scen_tree.n_u        # Every node has an input
-                + n_x                                       # Only state at t=0
-                + scen_tree.n                               # s variable: 1 component per node
-                + scen_tree.n_non_leaf_nodes * n_y)         # One y variable for each non leaf node
-    
-    """
-    We will structure the vector z as follows:
-    - z[
-        1:n_x
-    ] = x_0
-    - z[
-        n_x + 1 : 
-        n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u
-    ] = u
-    - z[
-        n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + 1 : 
-        n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n
-    ] = s
-    - z[
-        n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + 1 : 
-        n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + scen_tree.n_non_leaf_nodes * n_y
-    ] = y
-    """
+#     return (scen_tree.n_non_leaf_nodes * scen_tree.n_u              # Every non leaf node has an input
+#                 + n_x                                               # n_x
+#                 + scen_tree.n                                       # s variable: 1 component per node
+#                 + scen_tree.n_non_leaf_nodes * length(rms[1].b))    # One y variable for each non leaf node
+# end
 
-    z = repeat([NaN], n_z)
+# function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
+#     n_y = length(rms[1].b)
+#     if eliminate_states
+#         n_x = 0                             # Eliminate state variables
+#     else
+#         n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
+#     end
 
-    z[z_to_x(scen_tree)] = x0
-    z[z_to_u(scen_tree)] = u0
-    z[z_to_s(scen_tree)] = s0
-    z[z_to_y(scen_tree, n_y)] = y0
+#     n_L_rows = (size(rms[1].A)[2]    # 4a
+#                 + n_y                # 4b
+#                 + 1 + n_y)           # 4c
+#     n_cost_i = (n_x                                     # x0
+#         + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
+#         + 1)                                            # x_{T-1}[i]
+#     n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
+#     return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost
+# end
 
-    n_L_rows = (size(rms[1].A)[2]    # 4a
-                + n_y               # 4b
-                + 1 + n_y)           # 4c
-    n_cost_i = (n_x                                     # x0
-        + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
-        + 1)                                            # x_{T-1}[i]
-    n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
-    n_L = scen_tree.n_non_leaf_nodes * n_L_rows + n_cost
+function build_custom_model(scen_tree :: ScenarioTree, cost :: Cost, rms :: Vector{Riskmeasure}, z0, x0)
+    eliminate_states = true
+    # n_z = get_n_z(scen_tree, rms, eliminate_states)
+    n_z = length(z0)
+    z = z0
 
-    # 4a
-    """
-
-    """
-    L_I = Float64[]
-    L_J = Float64[]
-    L_V = Float64[]
-
-    n_y_start_index = (scen_tree.n_non_leaf_nodes * scen_tree.n_u  # Inputs
-                        + n_x                                     # State at t=0
-                        + scen_tree.n                             # S variables
-                        + 1)
-
-    ss = z_to_s(scen_tree)
-    yy = z_to_y(scen_tree, n_y)
-    for k = 1:scen_tree.n_non_leaf_nodes
-        Is = Float64[]
-        Js = Float64[]
-        Vs = Float64[]
-
-        Js = ss[scen_tree.child_mapping[k]]
-        append!(Is, [i for i in collect(1:length(Js))])
-        append!(Vs, [1 for _ in 1:length(Js)])
-        S_s = sparse(Is, Js, Vs, length(Is), n_y_start_index - 1)
-
-        Is = Float64[]
-        Js = Float64[]
-        Vs = Float64[]
-
-        Js = yy[(k - 1) * n_y + 1 : k * n_y] .- (n_y_start_index - 1)
-        append!(Is, [i for i in collect(1:length(Js))])
-        append!(Vs, [1 for _ in 1:length(Js)])
-        S_y = sparse(Is, Js, Vs, length(Is), n_z - n_y_start_index + 1)
-
-        r = rms[k]
-        S = hcat(sparse(r.A') * S_s, sparse(r.B') * S_y)
-        SI, SJ, SV = findnz(S)
-        if k > 1
-            append!(L_I, SI .+ maximum(L_I))
-        else
-            append!(L_I, SI)
-        end
-        append!(L_J, SJ)
-        append!(L_V, SV)
-    end
-
-    # 4b
-    """
-        L_I: Just one element per row => 1, 2, 3...
-        L_J: z_to_y
-        L_V: all ones
-    """
-    L_II = Float64[]
-    L_JJ = Float64[]
-    L_VV = Float64[]
-
-    yy = z_to_y(scen_tree, n_y)
-    for k = 1:scen_tree.n_non_leaf_nodes
-        ind = collect(
-        (k - 1) * n_y + 1 : k * n_y
-        )
-        append!(L_JJ, yy[ind])
-    end
-    append!(L_II, [i for i in collect(1 : scen_tree.n_non_leaf_nodes * n_y)])
-    append!(L_VV, [1 for _ in 1:scen_tree.n_non_leaf_nodes * n_y])
-    
-    # 4c
-    """
-        L_I: Just one element per row => 1, 2, 3...
-        L_J: z_to_s, z_to_y
-        L_V: all negative ones
-    """
-    L_III = Float64[]
-    L_JJJ = Float64[]
-    L_VVV = Float64[]
-
-    yy = z_to_y(scen_tree, n_y)
-    ss = z_to_s(scen_tree)
-    for k = 1:scen_tree.n_non_leaf_nodes
-        append!(L_JJJ, ss[k])
-        ind = collect(
-        (k - 1) * n_y + 1 : k * n_y
-        )
-        append!(L_JJ, yy[ind])
-    end
-    append!(L_III, [i for i in collect(1 : scen_tree.n_non_leaf_nodes * (n_y + 1))])
-    append!(L_VVV, [-1 for _ in 1:scen_tree.n_non_leaf_nodes * (n_y + 1)])    
-
-    # 4d
-    L_IIII = Float64[]
-    L_JJJJ = Float64[]
-    L_VVVV = Float64[]
-
-    xx = z_to_x(scen_tree)
-    uu = z_to_u(scen_tree)
-    for k = scen_tree.leaf_node_min_index : scen_tree.leaf_node_max_index
-        append!(L_JJJJ, xx)
-        append!(L_JJJJ, uu)
-        append!(L_JJJJ, ss[k])
-    end
-    append!(L_IIII, [i for i in 1 : length(L_JJJJ)])
-    append!(L_VVVV, [1 for _ in 1 : length(L_JJJJ)])
-
-
-    append!(L_I, L_II .+ maximum(L_I))
-    append!(L_I, L_III .+ maximum(L_I))
-    append!(L_I, L_IIII .+ maximum(L_I))
-    append!(L_J, L_JJ, L_JJJ, L_JJJJ)
-    append!(L_V, L_VV, L_VVV, L_VVVV)
-    L = sparse(L_I, L_J, L_V, n_L, n_z)
+    n_L = get_n_L(scen_tree, rms, eliminate_states)
 
     # TODO: Remove from here
     construct_cost_matrix(scen_tree, cost, dynamics)
@@ -261,22 +138,8 @@ function build_custom_model(scen_tree :: ScenarioTree, cost :: Cost, rms :: Vect
 end
 
 function solve_custom_model(model :: CustomModel)
-    n_y = length(rms[1].b)
-
-    n_z = (scen_tree.n_non_leaf_nodes * scen_tree.n_u       # Every node has an input
-                + n_x                                       # Only state at t=0
-                + scen_tree.n                               # s variable: 1 component per node
-                + scen_tree.n_non_leaf_nodes * n_y)         # One y variable for each non leaf node
-
-
-    n_L_rows = (size(rms[1].A)[2]    # 4a
-                + n_y               # 4b
-                + 1 + n_y)           # 4c
-    n_cost_i = (n_x                                     # x0
-        + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
-        + 1)                                            # x_{T-1}[i]
-    n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
-    n_L = scen_tree.n_non_leaf_nodes * n_L_rows + n_cost
+    n_z = get_n_z(scen_tree, rms, false)
+    n_L = get_n_L(scen_tree, rms, false)
 
     z = zeros(n_z)
     v = zeros(n_L)
@@ -287,6 +150,7 @@ end
 @enum Solver begin
     MOSEK_SOLVER = 1
     CUSTOM_SOLVER = 2
+    H_X_SOLVER = 3
 end
 
 function build_model(scen_tree :: ScenarioTree, solver :: Solver)
@@ -320,8 +184,12 @@ function build_model(scen_tree :: ScenarioTree, solver :: Solver)
         u0 = zeros(scen_tree.n_non_leaf_nodes * scen_tree.n_u)
         s0 = zeros(scen_tree.n)
         y0 = zeros(scen_tree.n_non_leaf_nodes * length(rms[1].b))
-        model = build_custom_model(scen_tree, cost, rms, x0, u0, s0, y0)
+        z0 = vcat(u0, s0, y0)
+        model = build_custom_model(scen_tree, cost, rms, z0, x0)
         return model
+    end
+    if solver == H_X_SOLVER
+        return build_h_x_model(scen_tree, rms)     
     end
 end
 
@@ -332,6 +200,10 @@ function solve_model(model :: Union{Model, CustomModel}, solver :: Solver)
         return value.(model[:x]), value.(model[:u])
     end
     if solver == CUSTOM_SOLVER
+        solve_custom_model(model)
+        return nothing, nothing
+    end
+    if solver == H_X_SOLVER
         solve_custom_model(model)
         return nothing, nothing
     end

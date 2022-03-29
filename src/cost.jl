@@ -58,8 +58,6 @@ function construct_cost_matrix(scen_tree :: ScenarioTree, cost :: Cost, dynamics
         append!(scenarios, [reverse(scenario)])
     end
 
-    println(scenarios)
-
     # Now, scenarios contains a list of lists, where each list defines all nodes for a single scenario
     T = length(scen_tree.min_index_per_timestep)
     # Qs = []
@@ -96,8 +94,6 @@ function construct_cost_matrix(scen_tree :: ScenarioTree, cost :: Cost, dynamics
         end
         append!(cs, [c])
     end
-
-    println(cs)
 
 end
 
