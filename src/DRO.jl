@@ -94,15 +94,15 @@ module DRO
     # Formulate the optimization problem
     ###
 
-    model = build_model(scen_tree, MOSEK_SOLVER)
+    model = build_model(scen_tree, CUSTOM_SOLVER)
 
     ###
     # Solve the optimization problem
     ###
 
-    x, u = solve_model(model, MOSEK_SOLVER)
+    x, u = solve_model(model, CUSTOM_SOLVER)
 
-    plot_scen_tree_x(scen_tree, x, "x")
+    # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")
     # plot_scen_tree_x_i(scen_tree, x, 2, "x_2")
 end

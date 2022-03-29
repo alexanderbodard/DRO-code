@@ -204,6 +204,9 @@ function build_custom_model(scen_tree :: ScenarioTree, cost :: Cost, rms :: Vect
     append!(L_V, L_VV, L_VVV, L_VVVV)
     L = sparse(L_I, L_J, L_V, n_L, n_z)
 
+    # TODO: Remove from here
+    construct_cost_matrix(scen_tree, cost, dynamics)
+
     model = CustomModel(
         z -> L*z,
         z -> L'*z,
@@ -330,6 +333,6 @@ function solve_model(model :: Union{Model, CustomModel}, solver :: Solver)
     end
     if solver == CUSTOM_SOLVER
         solve_custom_model(model)
-        return nothing
+        return nothing, nothing
     end
 end

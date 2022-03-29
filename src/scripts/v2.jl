@@ -143,7 +143,7 @@ function impose_dynamics(model :: Model, scen_tree :: ScenarioTree, dynamics :: 
         x[
             node_to_x(scen_tree, i)
         ] .== 
-            dynamics.A[scen_tree.node_info[i].w] * x[node_to_x(scen_tree, scen_tree.anc_mapping[i])]
+            dynamics.A[scen_tree.[i].w] * x[node_to_x(scen_tree, scen_tree.anc_mapping[i])]
             + dynamics.B[scen_tree.node_info[i].w] * u[node_to_u(scen_tree, scen_tree.anc_mapping[i])]
     )
 end
