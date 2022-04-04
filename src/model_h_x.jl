@@ -11,8 +11,10 @@ function bisection_method!(g_lb, g_ub, tol, psi)
     #     g_ub *= 2
     # end
 
-    if psi(g_lb)*psi(g_ub) > 0
-        error("Incorrect initial interval. Found $(psi(g_lb)) and $(psi(g_ub))")
+    # println(g_ub)
+
+    if ( psi(g_lb) + tol ) * ( psi(g_ub) - tol ) > 0 # only work up to a precision of the tolerance
+        error("Incorrect initial interval. Found $(psi(g_lb)) and $(psi(g_ub)) which results in $(( psi(g_lb) + tol ) * ( psi(g_ub) - tol ))")
     end
 
     while abs(g_ub-g_lb) > tol
@@ -41,7 +43,8 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
         for k = 1:scen_tree.n_non_leaf_nodes
             n_z_part = size(rms[k].A)[2]
             ind = collect(offset + 1 : offset + n_z_part)
-            z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], rms[k].C.subcones[1]) # TODO: Fix polar cone
+            z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
+            # println("4a: ", z[ind])
 
             offset += n_z_part
         end
@@ -50,8 +53,9 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
         for k = 1:scen_tree.n_non_leaf_nodes
             n_z_part = length(rms[k].b)
             ind = collect(offset + 1 : offset + n_z_part)
-            z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], rms[k].D.subcones[1]) # TODO: Fix polar cone
-
+            # println("Before: ", z[ind])
+            z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(4)) # TODO: Fix polar cone
+            # println("Should be negative: ", z[ind])
             offset += n_z_part
         end
 
@@ -125,11 +129,12 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             s = z[n_z_part + offset + 1]
 
             f = z_temp' * Q_bars[scen_ind] * z_temp
+            # println(f)
             if f > s
                 prox_f = gamma -> begin
                     I, J, V = findnz(Q_bars[scen_ind])
                     n_Q_x, n_Q_y = size(Q_bars[scen_ind])
-                    M_temp = sparse(I, J, 1 ./ (V .+ gamma), n_Q_x, n_Q_y)
+                    M_temp = sparse(I, J, 1 ./ (V .+ (1 ./ gamma)), n_Q_x, n_Q_y)
                     M_temp * (z_temp ./ gamma)
                 end
 
@@ -138,10 +143,17 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
 
                     temp' * Q_bars[scen_ind] * temp - gamma - s
                 end
+
+                # println("f: ", f)
+                # println("prox: ", prox_f(f)' * Q_bars[scen_ind] * prox_f(f))
+                # println("psi: ", psi(f))
+                # println("s: ", s)
+
                 local g_lb = 1e-12 # TODO: How close to zero?
-                local g_ub = 1.
+                local g_ub = f - s #1. TODO: Can be tighter with gamma
                 gamma_star = bisection_method!(g_lb, g_ub, 1e-4, psi)
-                println(gamma_star)
+                # println("s + gamma_star: ", s + gamma_star)
+                # println(gamma_star)
                 z[ind], z[n_z_part + offset + 1] = prox_f(gamma_star), s + gamma_star
             end
 
@@ -153,17 +165,20 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
         ind = collect(offset + 1 : offset + n_z_part)
         z[ind] = zeros(n_z_part)
 
+        # Initial condition
+        z[end-1 : end] = [2., 2.]
+
         return z
     end
 
     return CustomModel(
         z -> L * z,
         z -> L_trans * z,
-        x -> (
+        x -> begin
             temp = zeros(length(x));
             temp[1] = 1;
             temp
-        ),
+        end,
         (z, gamma) -> begin
             z - gamma * proj(z / gamma)
         end

@@ -18,24 +18,53 @@ function primal_dual_alg(x, v, model :: CustomModel)
     n_L = length(v)
 
     # TODO: Initialize Sigma and Gamma in some way
+    # Currently they are defined as c * LA.I, so that the bisection
+    # method can be used to retrieve c
     """
     - Sigma in S_{++}^{n_L}
     - Gamma in S_{++}^{n_z}
     """
-    sigma = 1e-6
-    gamma = 1e-6
-    Sigma = rand() * sparse(LA.I(n_L))
-    Gamma = rand() * sparse(LA.I(n_z))
+    sigma = 1e-4
+    gamma = 1e-4
+    Sigma = sigma * sparse(LA.I(n_L))
+    Gamma = gamma * sparse(LA.I(n_z))
     lambda = 0.5
 
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 100
+    while counter < 2000
+        x_old = copy(x) # TODO: Check Julia behaviour
+
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
+
+        # if counter < 5
+        #     println("------")
+        #     println(x[1:2])
+        #     println(xbar[1 : 2])
+        #     println((Gamma * model.Ltrans(v))[1:2])
+        #     # println((Gamma * model.grad_f(x))[1:2])
+        #     # println(collect(model.Ltrans(LA.I(length(v))))[1:2, 1:end])
+        #     # println(v)
+        # end
+
         vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma)
+
+        # if counter < 5
+        #     println("----")
+        #     println(vbar[end-1 : end])
+        #     println(v[end-1:end])
+        # end
+
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
 
+        # x[1:2] = [2., 2.]
+
+        # println("Solution norm: ", LA.norm((x - x_old) / x) / length(x))
+        if LA.norm((x - x_old) / x) / length(x) < 1e-6
+            println("Breaking!", counter)
+            break
+        end
         counter += 1
     end
 
@@ -115,10 +144,22 @@ function solve_custom_model(model :: CustomModel)
 
     z = primal_dual_alg(z, v, model)
 
+    println("x: ", z[
+        1:scen_tree.n * scen_tree.n_x
+    ])
+
+    println("u: ", z[
+        scen_tree.n * scen_tree.n_x + 1: scen_tree.n * scen_tree.n_x + (scen_tree.n - 1) * scen_tree.n_u
+    ])
+
+    println("s: ", z[z_to_s(scen_tree)])
+
+    println("y: ", z[z_to_y(scen_tree, 4)])
+
     return z[
         1:scen_tree.n * scen_tree.n_x
     ], z[
-        scen_tree.n * scen_tree.n_x + 1: scen_tree.n * scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u
+        scen_tree.n * scen_tree.n_x + 1: scen_tree.n * scen_tree.n_x + (scen_tree.n - 1) * scen_tree.n_u
     ]    
 end
 

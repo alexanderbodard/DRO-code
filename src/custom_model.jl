@@ -22,12 +22,12 @@ function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminat
     n_L_rows = (size(rms[1].A)[2]    # 4a
                 + n_y                # 4b
                 + 1 + n_y)           # 4c
-    n_cost_i = (n_x                                     # x0
+    n_cost_i = (n_x                                     # x
         + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
         + 1)                                            # x_{T-1}[i]
     n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
     n_dynamics = (scen_tree.n - 1) * scen_tree.n_x
-    return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost + n_dynamics
+    return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost + n_dynamics + scen_tree.n_x # Initial condition!
 end
 
 """
@@ -39,7 +39,7 @@ function construct_L_4a(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n
     L_V = Float64[]
 
     n_y_start_index = (scen_tree.n_non_leaf_nodes * scen_tree.n_u  # Inputs
-                        + n_x                                      # State at t=0
+                        + n_x * scen_tree.n                        # State at t=0
                         + scen_tree.n                              # S variables
                         + 1)
 
@@ -142,6 +142,8 @@ function construct_L_4d(scen_tree :: ScenarioTree)
     append!(L_I, [i for i in 1 : length(L_J)])
     append!(L_V, [1 for _ in 1 : length(L_J)])
 
+    # println(L_I)
+
     return L_I, L_J, L_V
 end
 
@@ -156,6 +158,7 @@ function construct_L_4e(scen_tree :: ScenarioTree, dynamics :: Dynamics, n_z :: 
     u_offset = scen_tree.n * scen_tree.n_x
     I_offset = 0
     J_offset = 0
+    B_J_offset = 0
     for k = 2 : scen_tree.n
         # For every non-root state, impose dynamics
         w = scen_tree.node_info[k].w
@@ -179,11 +182,12 @@ function construct_L_4e(scen_tree :: ScenarioTree, dynamics :: Dynamics, n_z :: 
         # B
         AI, AJ, AV = findnz(B)
         append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ J_offset .+ u_offset)
+        append!(L_J, AJ .+ B_J_offset .+ u_offset)
         append!(L_V, AV)
 
         I_offset += size(A)[1]
         J_offset += size(A)[2] # TODO: A is always square, so can be done with a single offset?
+        B_J_offset += size(B)[2]
     end
 
     return L_I, L_J, L_V
@@ -213,6 +217,11 @@ function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n_L 
         append!(L_J, L_JJ)
         append!(L_V, L_VV)
     end
+
+    # Initial condition
+    append!(L_I, maximum(L_I) .+ [1, 2])
+    append!(L_J, [1, 2])
+    append!(L_V, [1, 1])
 
     return sparse(L_I, L_J, L_V, n_L, n_z)
 end

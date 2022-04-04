@@ -101,7 +101,18 @@ module DRO
     ###
 
     x, u = solve_model(model, H_X_SOLVER)
-    println(x)
+    # println(x)
+    # println(u)
+    # @time solve_model(model, H_X_SOLVER)
+
+    L_II, L_JJ, L_VV = construct_L_4e(scen_tree, dynamics, length(x) + length(u))
+    H = sparse(L_II, L_JJ, L_VV, scen_tree.n_x * (scen_tree.n - 1), scen_tree.n * scen_tree.n_x + (scen_tree.n - 1) * scen_tree.n_u)
+
+    # println("--")
+    # # println(dynamics.A[1] * x[1:2] + dynamics.B[1] * u[1])
+    # println(H * vcat(x, u))
+    # display(collect(H)[1:6, 1:end])
+    # display(collect(H)[7:12, 1:end])
 
     # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")

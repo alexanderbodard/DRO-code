@@ -76,28 +76,28 @@ Note that in this formulation only x0 is used, so no index for x must be provide
 """
 function z_to_x(scen_tree :: ScenarioTree)
     return collect(
-        1 : scen_tree.n_x
+        1 : scen_tree.n_x * scen_tree.n
     )
 end    
 
 function z_to_u(scen_tree :: ScenarioTree)
     return collect(
-        scen_tree.n_x + 1 : 
-        scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u
+        scen_tree.n_x * scen_tree.n + 1 : 
+        scen_tree.n_x * scen_tree.n + scen_tree.n_non_leaf_nodes * scen_tree.n_u
     )
 end
 
 function z_to_s(scen_tree :: ScenarioTree)
     return collect(
-        scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + 1 :
-        scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n
+        scen_tree.n_x * scen_tree.n + scen_tree.n_non_leaf_nodes * scen_tree.n_u + 1 :
+        scen_tree.n_x * scen_tree.n + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n
     )
 end
 
 function z_to_y(scen_tree :: ScenarioTree, n_y :: Int64)
     return collect(
-        scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + 1 :
-        scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + scen_tree.n_non_leaf_nodes * n_y
+        scen_tree.n_x * scen_tree.n + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + 1 :
+        scen_tree.n_x * scen_tree.n + scen_tree.n_non_leaf_nodes * scen_tree.n_u + scen_tree.n + scen_tree.n_non_leaf_nodes * n_y
     )
 end
 
