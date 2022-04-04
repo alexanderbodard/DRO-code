@@ -23,42 +23,50 @@ function primal_dual_alg(x, v, model :: CustomModel)
     """
     - Sigma in S_{++}^{n_L}
     - Gamma in S_{++}^{n_z}
+
+    Choose sigma and gamma such that
+    sigma * gamma * model.L_norm < 1
     """
-    sigma = 1e-4
-    gamma = 1e-4
+    sigma = 1e-1
+    gamma = 1e-1
+    sigma = 0.4
+    gamma = 0.4
     Sigma = sigma * sparse(LA.I(n_L))
     Gamma = gamma * sparse(LA.I(n_z))
     lambda = 0.5
 
+    if (sigma * gamma * model.L_norm > 1)
+        error("sigma and gamma are not chosen correctly")
+    end
+
+    plot_vector = zeros(10000, 11)
+    x0 = x[1:3]
+
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 2000
+    while counter < 10000
         x_old = copy(x) # TODO: Check Julia behaviour
 
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
+        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma, counter == 10000 - 1)
 
-        # if counter < 5
-        #     println("------")
-        #     println(x[1:2])
-        #     println(xbar[1 : 2])
-        #     println((Gamma * model.Ltrans(v))[1:2])
-        #     # println((Gamma * model.grad_f(x))[1:2])
-        #     # println(collect(model.Ltrans(LA.I(length(v))))[1:2, 1:end])
-        #     # println(v)
-        # end
-
-        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma)
-
-        # if counter < 5
-        #     println("----")
-        #     println(vbar[end-1 : end])
-        #     println(v[end-1:end])
-        # end
+        if counter == 1
+            println(vbar)
+        end
 
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
 
-        # x[1:2] = [2., 2.]
+        plot_vector[counter + 1, 1:end] = x
+
+        # if counter < 3
+        #     println("-----------")
+        #     println("x: ", x[z_to_x(scen_tree)])
+        #     println("u: ", x[z_to_u(scen_tree)])
+        #     println("s: ", x[z_to_s(scen_tree)])
+        #     println("y: ", x[z_to_y(scen_tree, 4)])
+        #     println("v: ", v)
+        # end
 
         # println("Solution norm: ", LA.norm((x - x_old) / x) / length(x))
         if LA.norm((x - x_old) / x) / length(x) < 1e-6
@@ -66,7 +74,42 @@ function primal_dual_alg(x, v, model :: CustomModel)
             break
         end
         counter += 1
+
+        if counter == 10000
+            println("final vbar: ", vbar[12:21])
+        end
     end
+
+    println("final v: ", v[12:21])
+
+    # residues = Float64[]
+    # for i = 1:counter
+    #     append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref') / LA.norm(x0 .- x_ref .+ 1e-15))
+    # end
+
+    # # println(size(plot_vector))
+    # pgfplotsx()
+    # plot(residues, fmt = :png, labels=["x_residue"], xaxis=:log, yaxis=:log)
+    # # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+    # filename = "debug_x_res.png"
+    # savefig(filename)
+
+    # plot(plot_vector[1:counter, 1:3] .- x_ref', fmt = :png, labels=["x"])
+    # # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+    # filename = "debug_x.png"
+    # savefig(filename)
+
+    # plot(plot_vector[1:counter, 4], fmt = :png, labels=["u"])
+    # filename = "debug_u.png"
+    # savefig(filename)
+
+    # plot(plot_vector[1:counter, 5:7], fmt = :png, labels=["s"])
+    # filename = "debug_s.png"
+    # savefig(filename)
+
+    # plot(plot_vector[1:counter, 8:11], fmt = :png, labels=["y"])
+    # filename = "debug_y.png"
+    # savefig(filename)
 
     return x
 end
@@ -129,7 +172,8 @@ function build_custom_model(scen_tree :: ScenarioTree, cost :: Cost, rms :: Vect
 
             # z - gamma proj(x ./ gamma, )
             z # TODO
-        end
+        end,
+        nothing
     )
 
     return model
@@ -140,6 +184,10 @@ function solve_custom_model(model :: CustomModel)
     n_L = get_n_L(scen_tree, rms, false)
 
     z = zeros(n_z)
+    # z[1:3] = x_ref
+    # z[4] = u_ref[1]
+    # z[5:7] = s_ref
+    # z[8:11] = y_ref
     v = zeros(n_L)
 
     z = primal_dual_alg(z, v, model)
@@ -148,9 +196,7 @@ function solve_custom_model(model :: CustomModel)
         1:scen_tree.n * scen_tree.n_x
     ])
 
-    println("u: ", z[
-        scen_tree.n * scen_tree.n_x + 1: scen_tree.n * scen_tree.n_x + (scen_tree.n - 1) * scen_tree.n_u
-    ])
+    println("u: ", z[z_to_u(scen_tree)])
 
     println("s: ", z[z_to_s(scen_tree)])
 
@@ -158,9 +204,7 @@ function solve_custom_model(model :: CustomModel)
 
     return z[
         1:scen_tree.n * scen_tree.n_x
-    ], z[
-        scen_tree.n * scen_tree.n_x + 1: scen_tree.n * scen_tree.n_x + (scen_tree.n - 1) * scen_tree.n_u
-    ]    
+    ], z[z_to_u(scen_tree)]    
 end
 
 @enum Solver begin
@@ -182,7 +226,7 @@ function build_model(scen_tree :: ScenarioTree, solver :: Solver)
         @objective(model, Min, s[1])
 
         # TODO: Initial condition
-        @constraint(model, intial_condition[i=1:2], x[i] .== [2., 2.][i])
+        @constraint(model, intial_condition[i=1:1], x[i] .== [2.][i])
 
         # Impose cost
         impose_cost(model, scen_tree, cost)
@@ -213,7 +257,7 @@ function solve_model(model :: Union{Model, CustomModel}, solver :: Solver)
     if solver == MOSEK_SOLVER
         optimize!(model)
         # println(solution_summary(model, verbose=true))
-        return value.(model[:x]), value.(model[:u])
+        return value.(model[:x]), value.(model[:u]), value.(model[:s]), value.(model[:y])
     end
     if solver == CUSTOM_SOLVER
         solve_custom_model(model)

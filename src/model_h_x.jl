@@ -35,9 +35,14 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
 
     n_L = get_n_L(scen_tree, rms, eliminate_states)
     L = construct_L(scen_tree, rms, n_L, n_z)
+    # display(collect(L)[1:2, 1:end])
+    # display(collect(L)[3:6, 1:end])
+    # display(collect(L)[7:11, 1:end])
+    # display(collect(L)[12:21, 1:end])
+    # display(collect(L)[22:24, 1:end])
     L_trans = L'
 
-    proj = z -> begin
+    proj = (z, log) -> begin
         # 4a
         offset = 0
         for k = 1:scen_tree.n_non_leaf_nodes
@@ -67,7 +72,7 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             b_bar = [1; rms[k].b]
             dot_p = LA.dot(z[ind], b_bar)
             if dot_p > 0
-                z[ind] = dot_p / LA.dot(b_bar, b_bar) .* b_bar
+                z[ind] = z[ind] - dot_p / LA.dot(b_bar, b_bar) .* b_bar
             end
 
             offset += n_z_part
@@ -117,19 +122,22 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             end
 
             append!(Q_bars, [sparse(L_I, L_J, L_V, 
-                scen_tree.n * scen_tree.n_x + scen_tree.n_non_leaf_nodes * n_u, 
-                scen_tree.n * scen_tree.n_x + scen_tree.n_non_leaf_nodes * n_u
+                scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u, 
+                scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
             )])
         end
+        # display(Q_bars)
         # Compute projection
         for scen_ind  = 1:length(scenarios)
-            n_z_part = scen_tree.n * scen_tree.n_x + scen_tree.n_non_leaf_nodes * n_u
+            n_z_part = scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
             ind = collect(offset + 1 : offset + n_z_part)
             z_temp = z[ind]
             s = z[n_z_part + offset + 1]
 
-            f = z_temp' * Q_bars[scen_ind] * z_temp
-            # println(f)
+            f = 0.5 * z_temp' * Q_bars[scen_ind] * z_temp
+            if (log)
+                println("z_temp: ", z_temp, ", f: ", f, ", s: ", s)
+            end
             if f > s
                 prox_f = gamma -> begin
                     I, J, V = findnz(Q_bars[scen_ind])
@@ -141,7 +149,7 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
                 psi = gamma -> begin
                     temp = prox_f(gamma)
 
-                    temp' * Q_bars[scen_ind] * temp - gamma - s
+                    0.5 * temp' * Q_bars[scen_ind] * temp - gamma - s
                 end
 
                 # println("f: ", f)
@@ -151,13 +159,16 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
 
                 local g_lb = 1e-12 # TODO: How close to zero?
                 local g_ub = f - s #1. TODO: Can be tighter with gamma
-                gamma_star = bisection_method!(g_lb, g_ub, 1e-4, psi)
+                gamma_star = bisection_method!(g_lb, g_ub, 1e-8, psi)
                 # println("s + gamma_star: ", s + gamma_star)
                 # println(gamma_star)
                 z[ind], z[n_z_part + offset + 1] = prox_f(gamma_star), s + gamma_star
+                if (log)
+                    println("Afterwards:    f: ", prox_f(gamma_star), ", s: ", s + gamma_star)
+                end
             end
 
-            offset += n_z_part + 1
+            offset += (n_z_part + 1)
         end
 
         # 4e: Dynamics
@@ -166,21 +177,34 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
         z[ind] = zeros(n_z_part)
 
         # Initial condition
-        z[end-1 : end] = [2., 2.]
+        z[end] = 2.
 
         return z
     end
+
+    L_norm = maximum(LA.svdvals(collect(L)))^2
+    println(L_norm)
 
     return CustomModel(
         z -> L * z,
         z -> L_trans * z,
         x -> begin
             temp = zeros(length(x));
-            temp[1] = 1;
+            temp[z_to_s(scen_tree)[1]] = 1;
             temp
         end,
-        (z, gamma) -> begin
-            z - gamma * proj(z / gamma)
-        end
+        (z, gamma, log) -> begin
+            if log
+                println("-----------------")
+                println("Projection: ", gamma * proj(z / gamma, false)[12:21])
+                println("z: ", z[12:21] / gamma)
+                println("full z", z / gamma)
+                # println("At index 12: ", z[12])
+                # println((gamma * proj(z / gamma))[12])
+            end
+            z - gamma * proj(z / gamma, log)
+        end,
+        L_norm
+
     )
 end

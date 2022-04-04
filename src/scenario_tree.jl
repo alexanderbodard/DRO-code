@@ -141,3 +141,53 @@ function plot_scen_tree_x(scen_tree :: ScenarioTree, x :: Vector{Float64}, filen
         plot_scen_tree_x_i(scen_tree, x, i, string(filename, "_", i))
     end
 end
+
+function generate_scenario_tree(N :: Int64, d :: Int64, nx :: Int64, nu :: Int64)
+    if d <= 1
+        error("Branching factor d must be larger than 1, but is $(d).")
+    end
+    
+    # Total number of nodes in the scenario tree
+    n_total = (d^N - 1) / (d - 1)
+    # Total number of leaf nodes
+    n_leafs = d^(N - 1)
+    # Total number of non-leaf nodes
+    n_non_leafs = (d^(N - 1) - 1) / (d - 1)
+
+    node_info = [
+        ScenarioTreeNodeInfo(
+            collect((i - 1) * d + 1 : i * d),
+            i <= n_non_leafs ? [i] : nothing,
+            i > 1 ? (i % d) + 1 : nothing,
+            i,
+        ) for i in collect(1:n_total)
+    ]
+
+    child_mapping = Dict()
+    child_index = 2
+    for i = 1:n_non_leafs
+        child_mapping[i] = collect(child_index : child_index + d - 1)
+        child_index += d
+    end
+
+    anc_mapping = Dict()
+    for (key, value) in child_mapping
+        for v in value
+            anc_mapping[v] = key
+        end
+    end
+
+
+    return ScenarioTree(
+        child_mapping,
+        anc_mapping,
+        node_info,
+        nx,
+        nu,
+        n_total,
+        n_non_leafs,
+        n_non_leafs + 1,
+        n_total,
+        vcat([1], [1 + (d^(i) - 1)/(d-1) for i in collect(1:N-1)])
+    )
+end

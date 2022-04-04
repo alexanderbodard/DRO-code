@@ -5,7 +5,7 @@ function get_n_z(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminat
         n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
     end
 
-    return (scen_tree.n_non_leaf_nodes * scen_tree.n_u              # Every non leaf node has an input
+    return ((length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u # One input per time step
                 + n_x                                               # n_x
                 + scen_tree.n                                       # s variable: 1 component per node
                 + scen_tree.n_non_leaf_nodes * length(rms[1].b))    # One y variable for each non leaf node
@@ -157,37 +157,38 @@ function construct_L_4e(scen_tree :: ScenarioTree, dynamics :: Dynamics, n_z :: 
 
     u_offset = scen_tree.n * scen_tree.n_x
     I_offset = 0
-    J_offset = 0
+    # J_offset = 0
     B_J_offset = 0
     for k = 2 : scen_tree.n
         # For every non-root state, impose dynamics
         w = scen_tree.node_info[k].w
         A = dynamics.A[w]; B = dynamics.B[w]
         I = LA.I(size(A)[1])
+        anc_node = scen_tree.anc_mapping[k]
 
         # x+ = A x + B u
 
         # A
         AI, AJ, AV = findnz(A)
         append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ J_offset)
+        append!(L_J, AJ .+ (scen_tree.n_x * (anc_node - 1)))
         append!(L_V, AV)
 
         # -I
         AI, AJ, AV = findnz(-I)
         append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ J_offset .+ size(A)[2])
+        append!(L_J, AJ .+ (scen_tree.n_x) * (k - 1))
         append!(L_V, AV)
 
         # B
         AI, AJ, AV = findnz(B)
         append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ B_J_offset .+ u_offset)
+        append!(L_J, AJ .+ (scen_tree.n_u * (anc_node - 1)) .+ u_offset)
         append!(L_V, AV)
 
         I_offset += size(A)[1]
-        J_offset += size(A)[2] # TODO: A is always square, so can be done with a single offset?
-        B_J_offset += size(B)[2]
+        # J_offset += size(A)[2] # TODO: A is always square, so can be done with a single offset?
+        # B_J_offset += size(B)[2]
     end
 
     return L_I, L_J, L_V
@@ -219,9 +220,11 @@ function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n_L 
     end
 
     # Initial condition
-    append!(L_I, maximum(L_I) .+ [1, 2])
-    append!(L_J, [1, 2])
-    append!(L_V, [1, 1])
+    append!(L_I, maximum(L_I) .+ collect(1:scen_tree.n_x))
+    append!(L_J, collect(1:scen_tree.n_x))
+    append!(L_V, ones(length(scen_tree.n_x)))
+
+    println(n_L, ", ", maximum(L_I))
 
     return sparse(L_I, L_J, L_V, n_L, n_z)
 end
@@ -231,4 +234,5 @@ struct CustomModel{T, TT, TTT, U}
     Ltrans :: TT
     grad_f :: TTT
     prox_hstar_Sigmainv :: U
+    L_norm :: Float64
 end
