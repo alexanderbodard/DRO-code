@@ -19,12 +19,14 @@ function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminat
         n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
     end
 
+    n_timesteps = length(scen_tree.min_index_per_timestep)
+
     n_L_rows = (size(rms[1].A)[2]    # 4a
                 + n_y                # 4b
                 + 1 + n_y)           # 4c
-    n_cost_i = (n_x                                     # x
-        + scen_tree.n_non_leaf_nodes * scen_tree.n_u    # u
-        + 1)                                            # x_{T-1}[i]
+    n_cost_i = (scen_tree.n_x * n_timesteps    # x
+        + (n_timesteps - 1) * scen_tree.n_u    # u
+        + 1)                                   # x_{T-1}[i]
     n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
     n_dynamics = (scen_tree.n - 1) * scen_tree.n_x
     return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost + n_dynamics + scen_tree.n_x # Initial condition!
@@ -135,14 +137,22 @@ function construct_L_4d(scen_tree :: ScenarioTree)
     uu = z_to_u(scen_tree)
     ss = z_to_s(scen_tree)
     for k = scen_tree.leaf_node_min_index : scen_tree.leaf_node_max_index
-        append!(L_J, xx)
-        append!(L_J, uu)
-        append!(L_J, ss[k])
+        xxs = xx[node_to_x(scen_tree, k)]
+        uus = []
+        sss = [ss[k]]
+
+        for _ = length(scen_tree.min_index_per_timestep)-1:-1:1
+            n = scen_tree.anc_mapping[k]
+            pushfirst!(xxs, xx[node_to_x(scen_tree, n)]...)
+            pushfirst!(uus, uu[node_to_u(scen_tree, n)]...)
+        end
+        println(typeof(xxs))
+        append!(L_J, xxs)
+        append!(L_J, uus)
+        append!(L_J, sss)
     end
     append!(L_I, [i for i in 1 : length(L_J)])
     append!(L_V, [1 for _ in 1 : length(L_J)])
-
-    # println(L_I)
 
     return L_I, L_J, L_V
 end

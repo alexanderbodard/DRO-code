@@ -28,6 +28,24 @@ function bisection_method!(g_lb, g_ub, tol, psi)
     return (g_lb + g_ub) / 2.
 end
 
+function epigraph_qcqp(Q, x, t)
+    model = Model(Mosek.Optimizer)
+    set_silent(model)
+
+    @variable(model, p[i=1:length(x)])
+    @variable(model, s)
+    # @variable(model, tt >= 0)
+
+    # @objective(model, Min, sum((p[i] - x[i])^2 for i = 1:length(x)) + sum((s - t)^2))
+    # @objective(model, Min, [tt; vcat(p, s) - vcat(x, t)] in SecondOrderCone())
+    @objective(model, Min, (p[1] - x[1])^2 + (p[2] - x[2])^2 + (s - t)^2)
+
+    @constraint(model, 0.5 * p' * Q * p - s <= 0)
+
+    optimize!(model)
+    return value.(model[:p]), value.(model[:s])
+end
+
 function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
     eliminate_states = false
     n_z = get_n_z(scen_tree, rms, eliminate_states)
@@ -38,8 +56,8 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
     # display(collect(L)[1:2, 1:end])
     # display(collect(L)[3:6, 1:end])
     # display(collect(L)[7:11, 1:end])
-    # display(collect(L)[12:21, 1:end])
-    # display(collect(L)[22:24, 1:end])
+    # display(collect(L)[12:19, 1:end])
+    # display(collect(L)[20:22, 1:end])
     L_trans = L'
 
     proj = (z, log) -> begin
@@ -91,7 +109,7 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             append!(scenarios, [reverse(scenario)])
         end
         ####
-        R_offset = scen_tree.n * scen_tree.n_x
+        R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
         T = length(scen_tree.min_index_per_timestep)
         Q_bars = []
         # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
@@ -102,34 +120,36 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             L_J = Float64[]
             L_V = Float64[]
 
+            # TODO: This computation can be simplified a LOT
             for t = 1:T
                 nn = scenario[t]
                 # Add Q to Q_bar
                 Q_I, Q_J, Q_V = findnz(sparse(cost.Q[t]))
 
-                append!(L_I, Q_I .+ (nn - 1) * scen_tree.n_x)
-                append!(L_J, Q_J .+ (nn - 1) * scen_tree.n_x)
+                append!(L_I, Q_I .+ (t - 1) * scen_tree.n_x)
+                append!(L_J, Q_J .+ (t - 1) * scen_tree.n_x)
                 append!(L_V, 2 .* Q_V)
 
                 if t < T
                     # Add R to Q_bar
                     R_I, R_J, R_V = findnz(sparse(cost.R[t]))
 
-                    append!(L_I, R_I .+ R_offset .+ (nn - 1) * scen_tree.n_u)
-                    append!(L_J, R_J .+ R_offset .+ (nn - 1) * scen_tree.n_u)
+                    append!(L_I, R_I .+ R_offset .+ (t - 1) * scen_tree.n_u)
+                    append!(L_J, R_J .+ R_offset .+ (t - 1) * scen_tree.n_u)
                     append!(L_V, 2 .* R_V)
                 end
             end
 
             append!(Q_bars, [sparse(L_I, L_J, L_V, 
-                scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u, 
-                scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
+                length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u, 
+                length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
             )])
         end
         # display(Q_bars)
+
         # Compute projection
         for scen_ind  = 1:length(scenarios)
-            n_z_part = scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
+            n_z_part = length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
             ind = collect(offset + 1 : offset + n_z_part)
             z_temp = z[ind]
             s = z[n_z_part + offset + 1]
@@ -163,10 +183,14 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
                 # println("s + gamma_star: ", s + gamma_star)
                 # println(gamma_star)
                 z[ind], z[n_z_part + offset + 1] = prox_f(gamma_star), s + gamma_star
-                if (log)
-                    println("Afterwards:    f: ", prox_f(gamma_star), ", s: ", s + gamma_star)
-                end
             end
+
+            ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
+            if log
+                println("ppp, sss:", ppp, ", ", sss)
+                println("custom: ", z[ind], ", ", z[n_z_part + offset + 1])
+            end
+            z[ind], z[n_z_part + offset + 1] = ppp, sss
 
             offset += (n_z_part + 1)
         end
@@ -194,15 +218,17 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             temp
         end,
         (z, gamma, log) -> begin
-            if log
-                println("-----------------")
-                println("Projection: ", gamma * proj(z / gamma, false)[12:21])
-                println("z: ", z[12:21] / gamma)
-                println("full z", z / gamma)
-                # println("At index 12: ", z[12])
-                # println((gamma * proj(z / gamma))[12])
-            end
-            z - gamma * proj(z / gamma, log)
+            # if log
+            #     println("-----------------")
+            #     println("Projection: ", gamma * proj(z / gamma, false)[12:21])
+            #     println("z: ", z[12:21] / gamma)
+            #     println("full z", z / gamma)
+            #     # println("At index 12: ", z[12])
+            #     # println((gamma * proj(z / gamma))[12])
+            # end
+            res = z - proj(z * gamma, log) / gamma
+            # res[end] = z[end] - 2.
+            res
         end,
         L_norm
 

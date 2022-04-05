@@ -33,22 +33,22 @@ function primal_dual_alg(x, v, model :: CustomModel)
     gamma = 0.4
     Sigma = sigma * sparse(LA.I(n_L))
     Gamma = gamma * sparse(LA.I(n_z))
-    lambda = 0.5
+    lambda = 0.8
 
     if (sigma * gamma * model.L_norm > 1)
         error("sigma and gamma are not chosen correctly")
     end
 
-    plot_vector = zeros(10000, 11)
+    plot_vector = zeros(5000, 11)
     x0 = x[1:3]
 
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 10000
+    while counter < 5000
         x_old = copy(x) # TODO: Check Julia behaviour
 
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
-        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma, counter == 10000 - 1)
+        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma, counter % 100 == 0)
 
         if counter == 1
             println(vbar)
@@ -69,47 +69,41 @@ function primal_dual_alg(x, v, model :: CustomModel)
         # end
 
         # println("Solution norm: ", LA.norm((x - x_old) / x) / length(x))
-        if LA.norm((x - x_old) / x) / length(x) < 1e-6
+        if LA.norm((x - x_old) / x) / length(x) < 1e-12
             println("Breaking!", counter)
             break
         end
         counter += 1
-
-        if counter == 10000
-            println("final vbar: ", vbar[12:21])
-        end
     end
 
-    println("final v: ", v[12:21])
+    residues = Float64[]
+    for i = 1:counter
+        append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref') / LA.norm(x0 .- x_ref .+ 1e-15))
+    end
 
-    # residues = Float64[]
-    # for i = 1:counter
-    #     append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref') / LA.norm(x0 .- x_ref .+ 1e-15))
-    # end
+    # println(size(plot_vector))
+    pgfplotsx()
+    plot(residues, fmt = :png, labels=["x_residue"], xaxis=:log, yaxis=:log)
+    # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+    filename = "debug_x_res.png"
+    savefig(filename)
 
-    # # println(size(plot_vector))
-    # pgfplotsx()
-    # plot(residues, fmt = :png, labels=["x_residue"], xaxis=:log, yaxis=:log)
-    # # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
-    # filename = "debug_x_res.png"
-    # savefig(filename)
+    plot(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+    # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+    filename = "debug_x.png"
+    savefig(filename)
 
-    # plot(plot_vector[1:counter, 1:3] .- x_ref', fmt = :png, labels=["x"])
-    # # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
-    # filename = "debug_x.png"
-    # savefig(filename)
+    plot(plot_vector[1:counter, 4], fmt = :png, labels=["u"])
+    filename = "debug_u.png"
+    savefig(filename)
 
-    # plot(plot_vector[1:counter, 4], fmt = :png, labels=["u"])
-    # filename = "debug_u.png"
-    # savefig(filename)
+    plot(plot_vector[1:counter, 5:7], fmt = :png, labels=["s"])
+    filename = "debug_s.png"
+    savefig(filename)
 
-    # plot(plot_vector[1:counter, 5:7], fmt = :png, labels=["s"])
-    # filename = "debug_s.png"
-    # savefig(filename)
-
-    # plot(plot_vector[1:counter, 8:11], fmt = :png, labels=["y"])
-    # filename = "debug_y.png"
-    # savefig(filename)
+    plot(plot_vector[1:counter, 8:11], fmt = :png, labels=["y"])
+    filename = "debug_y.png"
+    savefig(filename)
 
     return x
 end
