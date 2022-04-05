@@ -76,24 +76,24 @@ module DRO
     ###
 
     x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, MOSEK_SOLVER)
-    println(x_ref)
+    println("x_ref: ", x_ref)
     println(u_ref)
     println(s_ref)
     println(y_ref)
 
     x, u = solve_model(model, H_X_SOLVER)
-    println("x: ", x)
-    println("u: ", u)
+    # println("x: ", x)
+    # println("u: ", u)
     # @time solve_model(model, H_X_SOLVER)
 
-    L_II, L_JJ, L_VV = construct_L_4e(scen_tree, dynamics, length(x) + length(u))
-    H = sparse(L_II, L_JJ, L_VV, scen_tree.n_x * (scen_tree.n - 1), scen_tree.n * scen_tree.n_x + (scen_tree.n_non_leaf_nodes) * scen_tree.n_u)
+    # L_II, L_JJ, L_VV = construct_L_4e(scen_tree, dynamics, length(x) + length(u))
+    # H = sparse(L_II, L_JJ, L_VV, scen_tree.n_x * (scen_tree.n - 1), scen_tree.n * scen_tree.n_x + (scen_tree.n_non_leaf_nodes) * scen_tree.n_u)
 
     # println("--")
     # # println(dynamics.A[1] * x[1:2] + dynamics.B[1] * u[1])
     # println(vcat(x_ref, u_ref))
     # println(vcat(x, u))
-    println(H * vcat(x, u))
+    # println(H * vcat(x, u))
     # println(H * vcat(x_ref, u_ref))
     # display(collect(H)[1:6, 1:end])
     # display(collect(H)[7:12, 1:end])

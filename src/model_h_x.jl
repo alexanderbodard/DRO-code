@@ -155,9 +155,9 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
             s = z[n_z_part + offset + 1]
 
             f = 0.5 * z_temp' * Q_bars[scen_ind] * z_temp
-            if (log)
-                println("z_temp: ", z_temp, ", f: ", f, ", s: ", s)
-            end
+            # if (log)
+            #     println("z_temp: ", z_temp, ", f: ", f, ", s: ", s)
+            # end
             if f > s
                 prox_f = gamma -> begin
                     I, J, V = findnz(Q_bars[scen_ind])
@@ -185,12 +185,12 @@ function build_h_x_model(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure})
                 z[ind], z[n_z_part + offset + 1] = prox_f(gamma_star), s + gamma_star
             end
 
-            ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
-            if log
-                println("ppp, sss:", ppp, ", ", sss)
-                println("custom: ", z[ind], ", ", z[n_z_part + offset + 1])
-            end
-            z[ind], z[n_z_part + offset + 1] = ppp, sss
+            # ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
+            # if log
+            #     println("ppp, sss:", ppp, ", ", sss)
+            #     println("custom: ", z[ind], ", ", z[n_z_part + offset + 1])
+            # end
+            # z[ind], z[n_z_part + offset + 1] = ppp, sss
 
             offset += (n_z_part + 1)
         end

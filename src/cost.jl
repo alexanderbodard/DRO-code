@@ -27,9 +27,10 @@ function get_scenario_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Co
 
     while node != 1
         node = scen_tree.anc_mapping[node]
-        res += x[node_to_x(scen_tree, node)]' * cost.Q[node_to_timestep(scen_tree, node)] * x[node_to_x(scen_tree, node)] 
-            + u[node_to_u(scen_tree, node)]' * cost.R[node_to_timestep(scen_tree, node)] * u[node_to_u(scen_tree, node)]
+        res += (x[node_to_x(scen_tree, node)]' * cost.Q[node_to_timestep(scen_tree, node)] * x[node_to_x(scen_tree, node)] 
+            + u[node_to_u(scen_tree, node)]' * cost.R[node_to_timestep(scen_tree, node)] * u[node_to_u(scen_tree, node)])
     end
+
     return res 
 end
 

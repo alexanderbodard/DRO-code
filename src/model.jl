@@ -27,32 +27,32 @@ function primal_dual_alg(x, v, model :: CustomModel)
     Choose sigma and gamma such that
     sigma * gamma * model.L_norm < 1
     """
-    sigma = 1e-1
-    gamma = 1e-1
+    sigma = 1e-2
+    gamma = 1e-2
     sigma = 0.4
     gamma = 0.4
     Sigma = sigma * sparse(LA.I(n_L))
     Gamma = gamma * sparse(LA.I(n_z))
-    lambda = 0.8
+    lambda = 0.5
 
     if (sigma * gamma * model.L_norm > 1)
         error("sigma and gamma are not chosen correctly")
     end
 
-    plot_vector = zeros(5000, 11)
-    x0 = x[1:3]
+    plot_vector = zeros(20000, 11)
+    x0 = copy(x[1:3])
 
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 5000
+    while counter < 20000
         x_old = copy(x) # TODO: Check Julia behaviour
 
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
         vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma, counter % 100 == 0)
 
-        if counter == 1
-            println(vbar)
-        end
+        # if counter == 1
+        #     println(vbar)
+        # end
 
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
@@ -69,7 +69,7 @@ function primal_dual_alg(x, v, model :: CustomModel)
         # end
 
         # println("Solution norm: ", LA.norm((x - x_old) / x) / length(x))
-        if LA.norm((x - x_old) / x) / length(x) < 1e-12
+        if LA.norm((x - x_old)) / LA.norm(x) < 1e-12
             println("Breaking!", counter)
             break
         end
@@ -78,12 +78,20 @@ function primal_dual_alg(x, v, model :: CustomModel)
 
     residues = Float64[]
     for i = 1:counter
-        append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref') / LA.norm(x0 .- x_ref .+ 1e-15))
+        append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref) / LA.norm(x0 .- x_ref))
+    end
+    fixed_point_residues = Float64[]
+    for i = 2:counter
+        append!(fixed_point_residues, LA.norm(plot_vector[i, 1:3] .- plot_vector[i-1, 1:3]) / LA.norm(plot_vector[i, 1:3]))
     end
 
-    # println(size(plot_vector))
     pgfplotsx()
-    plot(residues, fmt = :png, labels=["x_residue"], xaxis=:log, yaxis=:log)
+    plot(log10.(collect(1:length(fixed_point_residues))), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * log10(length(fixed_point_residues))), labels=["fixed_point_residue_x"])
+    # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+    filename = "fixed_point_residue_x.png"
+    savefig(filename)
+
+    plot(log10.(collect(1:length(residues))), log10.(residues), fmt = :png, xlims = (0, 1 * log10(length(residues))), labels=["residue_x"])
     # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
     filename = "debug_x_res.png"
     savefig(filename)
