@@ -40,8 +40,8 @@ function construct_L_4a(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n
     L_J = Float64[]
     L_V = Float64[]
 
-    n_y_start_index = (scen_tree.n_non_leaf_nodes * scen_tree.n_u  # Inputs
-                        + scen_tree.n_x * scen_tree.n                        # State at t=0
+    n_y_start_index = ((length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u  # Inputs
+                        + scen_tree.n_x * scen_tree.n              # State at t=0
                         + scen_tree.n                              # S variables
                         + 1)
 
@@ -142,7 +142,7 @@ function construct_L_4d(scen_tree :: ScenarioTree)
         for _ = length(scen_tree.min_index_per_timestep)-1:-1:1
             n = scen_tree.anc_mapping[k]
             pushfirst!(xxs, xx[node_to_x(scen_tree, n)]...)
-            pushfirst!(uus, uu[node_to_u(scen_tree, n)]...)
+            pushfirst!(uus, uu[node_to_timestep(scen_tree, n)]...)
         end
         append!(L_J, xxs)
         append!(L_J, uus)
@@ -229,7 +229,7 @@ function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, dyna
     # Initial condition
     append!(L_I, maximum(L_I) .+ collect(1:scen_tree.n_x))
     append!(L_J, collect(1:scen_tree.n_x))
-    append!(L_V, ones(length(scen_tree.n_x)))
+    append!(L_V, ones(scen_tree.n_x))
 
     return sparse(L_I, L_J, L_V, n_L, n_z)
 end
@@ -303,20 +303,20 @@ function psi(Q, gamma, z_temp, s)
     return 0.5 * temp' * Q * temp - gamma - s
 end
 
-function projection(scen_tree, rms, cost, z :: Vector{Float64}, inds_4a, inds_4b, inds_4c, b_bars, inds_4d, Q_bars, inds_4e)
+function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64})
     # 4a
-    for ind in inds_4a
+    for ind in model.inds_4a
         z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
     end
 
     # 4b
-    for ind in inds_4b
+    for ind in model.inds_4b
         z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(4)) # TODO: Fix polar cone
     end
 
     # 4c
-    for (i, ind) in enumerate(inds_4c)
-        b_bar = b_bars[i]
+    for (i, ind) in enumerate(model.inds_4c)
+        b_bar = model.b_bars[i]
         dot_p = LA.dot(z[ind], b_bar)
         if dot_p > 0
             z[ind] = z[ind] - dot_p / LA.dot(b_bar, b_bar) .* b_bar
@@ -324,16 +324,16 @@ function projection(scen_tree, rms, cost, z :: Vector{Float64}, inds_4a, inds_4b
     end
 
     # 4d: Compute projection
-    for (scen_ind, ind) in enumerate(inds_4d)
+    for (scen_ind, ind) in enumerate(model.inds_4d)
         z_temp = z[ind]
         s = z[ind[end] + 1]
 
-        f = 0.5 * z_temp' * Q_bars[scen_ind] * z_temp
+        f = 0.5 * z_temp' * model.Q_bars[scen_ind] * z_temp
         if f > s
             local g_lb = 1e-12 # TODO: How close to zero?
             local g_ub = f - s #1. TODO: Can be tighter with gamma
-            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, gamma -> psi(Q_bars[scen_ind], gamma, z_temp, s))
-            z[ind], z[ind[end] + 1] = prox_f(Q_bars[scen_ind], gamma_star, z_temp), s + gamma_star
+            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, gamma -> psi(model.Q_bars[scen_ind], gamma, z_temp, s))
+            z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp), s + gamma_star
         end
 
         # ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
@@ -341,15 +341,19 @@ function projection(scen_tree, rms, cost, z :: Vector{Float64}, inds_4a, inds_4b
     end
 
     # 4e: Dynamics
-    z[inds_4e] = zeros(length(inds_4e))
+    z[model.inds_4e] = zeros(length(model.inds_4e))
 
     # Initial condition
-    z[end] = 2.
+    z[end - length(x0) + 1 : end] = x0
 
     return z
 end
 
-function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL; DEBUG :: Bool = false, tol :: Float64 = 1e-12)
+function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64}, gamma :: Float64)
+    return z - projection(model, x0, z * gamma) / gamma
+end
+
+function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; DEBUG :: Bool = false, tol :: Float64 = 1e-12)
     n_z = length(x)
     n_L = length(v)
 
@@ -363,19 +367,26 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL; DEBUG :: Bool = fal
     Choose sigma and gamma such that
     sigma * gamma * model.L_norm < 1
     """
-    sigma = 0.4
-    gamma = 0.4
+    # sigma = 0.4
+    # gamma = 0.4
     # Sigma = sigma * sparse(LA.I(n_L))
     # Gamma = gamma * sparse(LA.I(n_z))
     lambda = 0.5
 
-    if (sigma * gamma * model.L_norm > 1)
-        error("sigma and gamma are not chosen correctly")
-    end
+    sigma = sqrt(0.9 / model.L_norm)
+    gamma = sigma
+
+    # if (sigma * gamma * model.L_norm > 1)
+    #     error("sigma and gamma are not chosen correctly")
+    # end
 
     if DEBUG
-        plot_vector = zeros(20000, 11)
-        x0 = copy(x[1:3])
+        plot_vector = zeros(20000, n_z)
+        nx = length(model.x_inds)
+        nu = length(model.u_inds)
+        ns = length(model.s_inds)
+        ny = length(model.y_inds)
+        xinit = copy(x[1:nx])
     end
 
     # TODO: Work with some tolerance
@@ -384,7 +395,7 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL; DEBUG :: Bool = fal
         x_old = copy(x) # TODO: Check Julia behaviour
 
         xbar = x - L_mult(model, gamma .* v, true) - Gamma_grad_mult(model, x, gamma)
-        vbar = model.prox_hstar_Sigmainv(v + L_mult(model, sigma .* (2 * xbar - x)), 1 ./ sigma)
+        vbar = prox_hstar(model, x0, v + L_mult(model, sigma .* (2 * xbar - x)), 1 ./ sigma)
 
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
@@ -403,11 +414,11 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL; DEBUG :: Bool = fal
     if DEBUG
         residues = Float64[]
         for i = 1:counter
-            append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref) / LA.norm(x0 .- x_ref))
+            append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
         end
         fixed_point_residues = Float64[]
         for i = 2:counter
-            append!(fixed_point_residues, LA.norm(plot_vector[i, 1:3] .- plot_vector[i-1, 1:3]) / LA.norm(plot_vector[i, 1:3]))
+            append!(fixed_point_residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- plot_vector[i-1, 1:length(model.x_inds)]) / LA.norm(plot_vector[i, 1:length(model.x_inds)]))
         end
 
         pgfplotsx()
@@ -423,15 +434,15 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL; DEBUG :: Bool = fal
         filename = "debug_x.png"
         savefig(filename)
 
-        plot(plot_vector[1:counter, 4], fmt = :png, labels=["u"])
+        plot(plot_vector[1:counter, nx + 1 : nx + nu], fmt = :png, labels=["u"])
         filename = "debug_u.png"
         savefig(filename)
 
-        plot(plot_vector[1:counter, 5:7], fmt = :png, labels=["s"])
+        plot(plot_vector[1:counter, nx + nu + 1 : nx + nu + ns], fmt = :png, labels=["s"])
         filename = "debug_s.png"
         savefig(filename)
 
-        plot(plot_vector[1:counter, 8:11], fmt = :png, labels=["y"])
+        plot(plot_vector[1:counter, nx + nu + ns + 1 : nx + nu + ns + ny], fmt = :png, labels=["y"])
         filename = "debug_y.png"
         savefig(filename)
     end
@@ -555,18 +566,18 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
 
     return DYNAMICS_IN_L_MODEL(
         L,
-        (z, gamma) -> begin
-            # if log
-            #     println("-----------------")
-            #     println("Projection: ", gamma * proj(z / gamma, false)[12:21])
-            #     println("z: ", z[12:21] / gamma)
-            #     println("full z", z / gamma)
-            #     # println("At index 12: ", z[12])
-            #     # println((gamma * proj(z / gamma))[12])
-            # end
-            res = z - projection(scen_tree, rms, cost, z * gamma, inds_4a, inds_4b, inds_4c, b_bars, inds_4d, Q_bars, inds_4e) / gamma
-            res
-        end,
+        # (z, gamma) -> begin
+        #     # if log
+        #     #     println("-----------------")
+        #     #     println("Projection: ", gamma * proj(z / gamma, false)[12:21])
+        #     #     println("z: ", z[12:21] / gamma)
+        #     #     println("full z", z / gamma)
+        #     #     # println("At index 12: ", z[12])
+        #     #     # println((gamma * proj(z / gamma))[12])
+        #     # end
+        #     # res = z - projection(scen_tree, rms, cost, z * gamma) / gamma
+        #     res
+        # end,
         L_norm,
         n_z,
         n_L,
@@ -588,7 +599,7 @@ function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol ::
     z = zeros(model.nz)
     v = zeros(model.nv)
 
-    z = primal_dual_alg(z, v, model, tol=tol)
+    z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose)
 
     if verbose
         println("x: ", z[model.x_inds])

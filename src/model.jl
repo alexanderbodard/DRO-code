@@ -22,9 +22,9 @@ const MOSEK_MODEL = Model
 """
 Model in which the problem dynamics Hx = 0 are imposed by including H in the L matrix.
 """
-struct DYNAMICS_IN_L_MODEL{T, U} <: CUSTOM_SOLVER_MODEL
+struct DYNAMICS_IN_L_MODEL{T} <: CUSTOM_SOLVER_MODEL
     L :: T
-    prox_hstar_Sigmainv :: U
+    # prox_hstar_Sigmainv :: U
     L_norm :: Float64
     nz :: Int64
     nv :: Int64

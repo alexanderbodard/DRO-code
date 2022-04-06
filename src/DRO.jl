@@ -14,7 +14,7 @@ module DRO
     include("dynamics_in_l_model.jl")
     include("mosek_model.jl")
 
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
     import MathOptInterface as MOI
     import MathOptSetDistances as MOD
     import LinearAlgebra as LA
@@ -29,24 +29,17 @@ module DRO
     ###
 
     # Scenario tree
-    N = 2; d = 2; nx = 1; nu = 1
+    N = 3; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
     T_s = 0.05
-    # n_x = 2
-    n_x = 1
-    n_u = 1
-    d = 2
-    # A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
-    # B = [reshape([0., T_s], :, 1) for _ in 1:d]
-    A = [reshape([i / 4], 1, 1) for i = 1:d]
-    B = [reshape([T_s], :, 1) for _ in 1:d]
-    dynamics = Dynamics(A, B, n_x, n_u)
+    A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
+    B = [reshape([0., T_s], :, 1) for _ in 1:d]
+    dynamics = Dynamics(A, B, nx, nu)
 
     # Cost: Let's take a quadratic cost, equal at all timesteps
-    # Q = LA.Matrix([2.2 0; 0 3.7])
-    Q = reshape([2.2], 1, 1)
+    Q = LA.Matrix([2.2 0; 0 3.7])
     R = reshape([3.2], 1, 1)
     cost = Cost(
         collect([
@@ -83,15 +76,15 @@ module DRO
     # Solve the optimization problem
     ###
 
-    @time solve_model(reference_model, [0.])
-    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [0.])
-    # println("x_ref: ", x_ref)
-    # println("u_ref", u_ref)
+    # @time solve_model(reference_model, [0.])
+    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
+    println("x_ref: ", x_ref)
+    println("u_ref", u_ref)
 
-    @time solve_model(model, [0.])
-    # x, u = solve_model(model, [0.])
-    # println("x: ", x)
-    # println("u: ", u)
+    # @time solve_model(model, [0.])
+    x, u = solve_model(model, [2., 2.], verbose=false)
+    println("x: ", x)
+    println("u: ", u)
 
     # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")
