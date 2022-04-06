@@ -282,7 +282,17 @@ function epigraph_qcqp(Q, x, t)
     return value.(model[:p]), value.(model[:s])
 end
 
-function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, DEBUG :: Bool = false)
+function L_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, transp :: Bool = false)
+    transp ? model.L' * z : model.L * z
+end
+
+function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, gamma :: Float64)
+    temp = zeros(length(z));
+    temp[model.s_inds[1]] = 1;
+    return gamma .* temp
+end
+
+function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL; DEBUG :: Bool = false, tol :: Float64 = 1e-12)
     n_z = length(x)
     n_L = length(v)
 
@@ -306,16 +316,18 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, DEBUG :: Bool = fal
         error("sigma and gamma are not chosen correctly")
     end
 
-    plot_vector = zeros(20000, 11)
-    x0 = copy(x[1:3])
+    if DEBUG
+        plot_vector = zeros(20000, 11)
+        x0 = copy(x[1:3])
+    end
 
     # TODO: Work with some tolerance
     counter = 0
     while counter < 20000
         x_old = copy(x) # TODO: Check Julia behaviour
 
-        xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
-        vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma, counter % 100 == 0)
+        xbar = x - Gamma * L_mult(model, v, true) - Gamma_grad_mult(model, x, gamma)
+        vbar = model.prox_hstar_Sigmainv(v + Sigma * L_mult(model, (2 * xbar - x)), 1 ./ sigma)
 
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
@@ -324,7 +336,7 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, DEBUG :: Bool = fal
             plot_vector[counter + 1, 1:end] = x
         end
 
-        if LA.norm((x - x_old)) / LA.norm(x) < 1e-12
+        if LA.norm((x - x_old)) / LA.norm(x) < tol
             println("Breaking!", counter)
             break
         end
@@ -524,14 +536,8 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     L_norm = maximum(LA.svdvals(collect(L)))^2
 
     return DYNAMICS_IN_L_MODEL(
-        z -> L * z,
-        z -> L_trans * z,
-        x -> begin
-            temp = zeros(length(x));
-            temp[z_to_s(scen_tree)[1]] = 1;
-            temp
-        end,
-        (z, gamma, log) -> begin
+        L,
+        (z, gamma) -> begin
             # if log
             #     println("-----------------")
             #     println("Projection: ", gamma * proj(z / gamma, false)[12:21])
@@ -553,11 +559,11 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     )
 end
 
-function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, tol :: Float64 = 1e-8, verbose :: Bool = false)
+function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false)
     z = zeros(model.nz)
     v = zeros(model.nv)
 
-    z = primal_dual_alg(z, v, model)
+    z = primal_dual_alg(z, v, model, tol=tol)
 
     if verbose
         println("x: ", z[model.x_inds])

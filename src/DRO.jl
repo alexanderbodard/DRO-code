@@ -83,15 +83,15 @@ module DRO
     # Solve the optimization problem
     ###
 
-    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [0.])
-    # @time solve_model(reference_model, [0.])
-    println("x_ref: ", x_ref)
-    println("u_ref", u_ref)
+    @time solve_model(reference_model, [0.])
+    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [0.])
+    # println("x_ref: ", x_ref)
+    # println("u_ref", u_ref)
 
-    x, u = solve_model(model, [0.])
-    # @time solve_model(model, [0.])
-    println("x: ", x)
-    println("u: ", u)
+    @time solve_model(model, [0.])
+    # x, u = solve_model(model, [0.])
+    # println("x: ", x)
+    # println("u: ", u)
 
     # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")

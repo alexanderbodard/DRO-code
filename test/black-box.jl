@@ -70,7 +70,7 @@ Random.seed!(1234)
     ###
 
     x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2.])
-    x, u = solve_model(model, [2.])
+    x, u = solve_model(model, [2.], tol=1e-12)
 
     @test isapprox(x, x_ref, rtol = 1e-5)
     @test isapprox(u, u_ref, rtol = 1e-5)
