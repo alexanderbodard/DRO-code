@@ -1,10 +1,18 @@
 module DRO
 
+    ###
+    # Problem definition
+    ###
     include("cost.jl")
     include("dynamics.jl")
-    include("model.jl")
     include("risk_constraints.jl")
     include("scenario_tree.jl")
+
+    include("model.jl")
+    include("custom_model.jl")
+
+    include("dynamics_in_l_model.jl")
+    include("mosek_model.jl")
 
     using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots
     import MathOptInterface as MOI
@@ -68,35 +76,20 @@ module DRO
     # Formulate the optimization problem
     ###
 
-    reference_model = build_model(scen_tree, MOSEK_SOLVER)
-    model = build_model(scen_tree, H_X_SOLVER)
+    reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
+    model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
 
     ###
     # Solve the optimization problem
     ###
 
-    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, MOSEK_SOLVER)
+    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [0.])
     println("x_ref: ", x_ref)
     println(u_ref)
     println(s_ref)
     println(y_ref)
 
-    x, u = solve_model(model, H_X_SOLVER)
-    # println("x: ", x)
-    # println("u: ", u)
-    # @time solve_model(model, H_X_SOLVER)
-
-    # L_II, L_JJ, L_VV = construct_L_4e(scen_tree, dynamics, length(x) + length(u))
-    # H = sparse(L_II, L_JJ, L_VV, scen_tree.n_x * (scen_tree.n - 1), scen_tree.n * scen_tree.n_x + (scen_tree.n_non_leaf_nodes) * scen_tree.n_u)
-
-    # println("--")
-    # # println(dynamics.A[1] * x[1:2] + dynamics.B[1] * u[1])
-    # println(vcat(x_ref, u_ref))
-    # println(vcat(x, u))
-    # println(H * vcat(x, u))
-    # println(H * vcat(x_ref, u_ref))
-    # display(collect(H)[1:6, 1:end])
-    # display(collect(H)[7:12, 1:end])
+    x, u = solve_model(model, [0.])
 
     # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")

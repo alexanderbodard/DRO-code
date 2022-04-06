@@ -8,7 +8,7 @@ end
 
 abstract type AbstractRiskMeasure end 
 
-struct  Riskmeasure <: AbstractRiskMeasure
+struct Riskmeasure <: AbstractRiskMeasure
     A:: Matrix{Float64}
     B:: Matrix{Float64}
     b:: Vector{Float64}
