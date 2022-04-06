@@ -1,11 +1,6 @@
 using Test
 include("../src/scenario_tree.jl")
 
-@testset "Scenario Tree" begin
-    @test 5 == 5
-    @test 1 + 2 == 3
-end
-
 @testset "Generate scenario trees" begin
     function verify_generated_scenario_tree(N, d, nx, nu, scen_tree)
         gen_scen_tree = generate_scenario_tree(N, d, nx, nu)

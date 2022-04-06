@@ -1,28 +1,21 @@
-module DRO
+include("../src/cost.jl")
+include("../src/dynamics.jl")
+include("../src/risk_constraints.jl")
+include("../src/scenario_tree.jl")
 
-    ###
-    # Problem definition
-    ###
-    include("cost.jl")
-    include("dynamics.jl")
-    include("risk_constraints.jl")
-    include("scenario_tree.jl")
+include("../src/model.jl")
+include("../src/custom_model.jl")
 
-    include("model.jl")
-    include("custom_model.jl")
+include("../src/dynamics_in_l_model.jl")
+include("../src/mosek_model.jl")
 
-    include("dynamics_in_l_model.jl")
-    include("mosek_model.jl")
+using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots
+import MathOptInterface as MOI
+import MathOptSetDistances as MOD
+import LinearAlgebra as LA
+Random.seed!(1234)
 
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots
-    import MathOptInterface as MOI
-    import MathOptSetDistances as MOD
-    import LinearAlgebra as LA
-    Random.seed!(1234)
-
-    ##########################
-    # Mosek reference implementation
-    ##########################
+@testset "Small model" begin
 
     ###
     # Problem statement
@@ -34,18 +27,11 @@ module DRO
 
     # Dynamics: Based on a discretized car model
     T_s = 0.05
-    # n_x = 2
-    n_x = 1
-    n_u = 1
-    d = 2
-    # A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
-    # B = [reshape([0., T_s], :, 1) for _ in 1:d]
     A = [reshape([i / 4], 1, 1) for i = 1:d]
     B = [reshape([T_s], :, 1) for _ in 1:d]
-    dynamics = Dynamics(A, B, n_x, n_u)
+    dynamics = Dynamics(A, B, nx, nu)
 
     # Cost: Let's take a quadratic cost, equal at all timesteps
-    # Q = LA.Matrix([2.2 0; 0 3.7])
     Q = reshape([2.2], 1, 1)
     R = reshape([3.2], 1, 1)
     cost = Cost(
@@ -83,17 +69,9 @@ module DRO
     # Solve the optimization problem
     ###
 
-    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [0.])
-    # @time solve_model(reference_model, [0.])
-    println("x_ref: ", x_ref)
-    println("u_ref", u_ref)
+    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2.])
+    x, u = solve_model(model, [2.])
 
-    x, u = solve_model(model, [0.])
-    # @time solve_model(model, [0.])
-    println("x: ", x)
-    println("u: ", u)
-
-    # plot_scen_tree_x(scen_tree, x, "x")
-    # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")
-    # plot_scen_tree_x_i(scen_tree, x, 2, "x_2")
+    @test isapprox(x, x_ref, rtol = 1e-5)
+    @test isapprox(u, u_ref, rtol = 1e-5)
 end

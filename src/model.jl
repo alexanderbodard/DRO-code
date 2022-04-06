@@ -28,6 +28,12 @@ struct DYNAMICS_IN_L_MODEL{T, TT, TTT, U} <: CUSTOM_SOLVER_MODEL
     grad_f :: TTT
     prox_hstar_Sigmainv :: U
     L_norm :: Float64
+    nz :: Int64
+    nv :: Int64
+    x_inds :: Vector{Int64}
+    u_inds :: Vector{Int64}
+    s_inds :: Vector{Int64}
+    y_inds :: Vector{Int64}
 end
 
 """

@@ -41,7 +41,7 @@ function construct_L_4a(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n
     L_V = Float64[]
 
     n_y_start_index = (scen_tree.n_non_leaf_nodes * scen_tree.n_u  # Inputs
-                        + n_x * scen_tree.n                        # State at t=0
+                        + scen_tree.n_x * scen_tree.n                        # State at t=0
                         + scen_tree.n                              # S variables
                         + 1)
 
@@ -146,7 +146,6 @@ function construct_L_4d(scen_tree :: ScenarioTree)
             pushfirst!(xxs, xx[node_to_x(scen_tree, n)]...)
             pushfirst!(uus, uu[node_to_u(scen_tree, n)]...)
         end
-        println(typeof(xxs))
         append!(L_J, xxs)
         append!(L_J, uus)
         append!(L_J, sss)
@@ -207,7 +206,7 @@ end
 """
 Currently doesn't support elimination of states
 """
-function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n_L :: Int64, n_z :: Int64)
+function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, dynamics :: Dynamics, n_L :: Int64, n_z :: Int64)
     n_y = length(rms[1].b)
 
     L_I, L_J, L_V = construct_L_4a(scen_tree, rms, n_z, n_y)
@@ -233,8 +232,6 @@ function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n_L 
     append!(L_I, maximum(L_I) .+ collect(1:scen_tree.n_x))
     append!(L_J, collect(1:scen_tree.n_x))
     append!(L_V, ones(length(scen_tree.n_x)))
-
-    println(n_L, ", ", maximum(L_I))
 
     return sparse(L_I, L_J, L_V, n_L, n_z)
 end
@@ -285,7 +282,7 @@ function epigraph_qcqp(Q, x, t)
     return value.(model[:p]), value.(model[:s])
 end
 
-function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL)
+function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, DEBUG :: Bool = false)
     n_z = length(x)
     n_L = length(v)
 
@@ -299,8 +296,6 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL)
     Choose sigma and gamma such that
     sigma * gamma * model.L_norm < 1
     """
-    sigma = 1e-2
-    gamma = 1e-2
     sigma = 0.4
     gamma = 0.4
     Sigma = sigma * sparse(LA.I(n_L))
@@ -322,25 +317,13 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL)
         xbar = x - Gamma * model.Ltrans(v) - Gamma * model.grad_f(x)
         vbar = model.prox_hstar_Sigmainv(v + Sigma * model.L(2 * xbar - x), 1 ./ sigma, counter % 100 == 0)
 
-        # if counter == 1
-        #     println(vbar)
-        # end
-
         x = lambda * xbar + (1 - lambda) * x
         v = lambda * vbar + (1 - lambda) * v
 
-        plot_vector[counter + 1, 1:end] = x
+        if DEBUG
+            plot_vector[counter + 1, 1:end] = x
+        end
 
-        # if counter < 3
-        #     println("-----------")
-        #     println("x: ", x[z_to_x(scen_tree)])
-        #     println("u: ", x[z_to_u(scen_tree)])
-        #     println("s: ", x[z_to_s(scen_tree)])
-        #     println("y: ", x[z_to_y(scen_tree, 4)])
-        #     println("v: ", v)
-        # end
-
-        # println("Solution norm: ", LA.norm((x - x_old) / x) / length(x))
         if LA.norm((x - x_old)) / LA.norm(x) < 1e-12
             println("Breaking!", counter)
             break
@@ -348,42 +331,41 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL)
         counter += 1
     end
 
-    residues = Float64[]
-    for i = 1:counter
-        append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref) / LA.norm(x0 .- x_ref))
+    if DEBUG
+        residues = Float64[]
+        for i = 1:counter
+            append!(residues, LA.norm(plot_vector[i, 1:3] .- x_ref) / LA.norm(x0 .- x_ref))
+        end
+        fixed_point_residues = Float64[]
+        for i = 2:counter
+            append!(fixed_point_residues, LA.norm(plot_vector[i, 1:3] .- plot_vector[i-1, 1:3]) / LA.norm(plot_vector[i, 1:3]))
+        end
+
+        pgfplotsx()
+        plot(log10.(collect(1:length(fixed_point_residues))), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * log10(length(fixed_point_residues))), labels=["fixed_point_residue_x"])
+        filename = "fixed_point_residue_x.png"
+        savefig(filename)
+
+        plot(log10.(collect(1:length(residues))), log10.(residues), fmt = :png, xlims = (0, 1 * log10(length(residues))), labels=["residue_x"])
+        filename = "debug_x_res.png"
+        savefig(filename)
+
+        plot(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+        filename = "debug_x.png"
+        savefig(filename)
+
+        plot(plot_vector[1:counter, 4], fmt = :png, labels=["u"])
+        filename = "debug_u.png"
+        savefig(filename)
+
+        plot(plot_vector[1:counter, 5:7], fmt = :png, labels=["s"])
+        filename = "debug_s.png"
+        savefig(filename)
+
+        plot(plot_vector[1:counter, 8:11], fmt = :png, labels=["y"])
+        filename = "debug_y.png"
+        savefig(filename)
     end
-    fixed_point_residues = Float64[]
-    for i = 2:counter
-        append!(fixed_point_residues, LA.norm(plot_vector[i, 1:3] .- plot_vector[i-1, 1:3]) / LA.norm(plot_vector[i, 1:3]))
-    end
-
-    pgfplotsx()
-    plot(log10.(collect(1:length(fixed_point_residues))), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * log10(length(fixed_point_residues))), labels=["fixed_point_residue_x"])
-    # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
-    filename = "fixed_point_residue_x.png"
-    savefig(filename)
-
-    plot(log10.(collect(1:length(residues))), log10.(residues), fmt = :png, xlims = (0, 1 * log10(length(residues))), labels=["residue_x"])
-    # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
-    filename = "debug_x_res.png"
-    savefig(filename)
-
-    plot(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
-    # plot!(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
-    filename = "debug_x.png"
-    savefig(filename)
-
-    plot(plot_vector[1:counter, 4], fmt = :png, labels=["u"])
-    filename = "debug_u.png"
-    savefig(filename)
-
-    plot(plot_vector[1:counter, 5:7], fmt = :png, labels=["s"])
-    filename = "debug_s.png"
-    savefig(filename)
-
-    plot(plot_vector[1:counter, 8:11], fmt = :png, labels=["y"])
-    filename = "debug_y.png"
-    savefig(filename)
 
     return x
 end
@@ -398,7 +380,7 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     z = zeros(n_z)
 
     n_L = get_n_L(scen_tree, rms, eliminate_states)
-    L = construct_L(scen_tree, rms, n_L, n_z)
+    L = construct_L(scen_tree, rms, dynamics, n_L, n_z)
     L_trans = L'
 
     proj = (z, log) -> begin
@@ -482,15 +464,14 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
             end
 
             append!(Q_bars, [sparse(L_I, L_J, L_V, 
-                length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u, 
-                length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
+                length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u, 
+                length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
             )])
         end
-        # display(Q_bars)
 
         # Compute projection
         for scen_ind  = 1:length(scenarios)
-            n_z_part = length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * n_u
+            n_z_part = length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
             ind = collect(offset + 1 : offset + n_z_part)
             z_temp = z[ind]
             s = z[n_z_part + offset + 1]
@@ -513,16 +494,9 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
                     0.5 * temp' * Q_bars[scen_ind] * temp - gamma - s
                 end
 
-                # println("f: ", f)
-                # println("prox: ", prox_f(f)' * Q_bars[scen_ind] * prox_f(f))
-                # println("psi: ", psi(f))
-                # println("s: ", s)
-
                 local g_lb = 1e-12 # TODO: How close to zero?
                 local g_ub = f - s #1. TODO: Can be tighter with gamma
                 gamma_star = bisection_method!(g_lb, g_ub, 1e-8, psi)
-                # println("s + gamma_star: ", s + gamma_star)
-                # println(gamma_star)
                 z[ind], z[n_z_part + offset + 1] = prox_f(gamma_star), s + gamma_star
             end
 
@@ -548,7 +522,6 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     end
 
     L_norm = maximum(LA.svdvals(collect(L)))^2
-    println(L_norm)
 
     return DYNAMICS_IN_L_MODEL(
         z -> L * z,
@@ -568,38 +541,30 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
             #     # println((gamma * proj(z / gamma))[12])
             # end
             res = z - proj(z * gamma, log) / gamma
-            # res[end] = z[end] - 2.
             res
         end,
-        L_norm
-
+        L_norm,
+        n_z,
+        n_L,
+        z_to_x(scen_tree),
+        z_to_u(scen_tree),
+        z_to_s(scen_tree),
+        z_to_y(scen_tree, 4)
     )
 end
 
-function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, tol :: Float64 = 1e-8)
-    n_z = get_n_z(scen_tree, rms, false)
-    n_L = get_n_L(scen_tree, rms, false)
-
-    z = zeros(n_z)
-    # z[1:3] = x_ref
-    # z[4] = u_ref[1]
-    # z[5:7] = s_ref
-    # z[8:11] = y_ref
-    v = zeros(n_L)
+function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, tol :: Float64 = 1e-8, verbose :: Bool = false)
+    z = zeros(model.nz)
+    v = zeros(model.nv)
 
     z = primal_dual_alg(z, v, model)
 
-    println("x: ", z[
-        1:scen_tree.n * scen_tree.n_x
-    ])
+    if verbose
+        println("x: ", z[model.x_inds])
+        println("u: ", z[model.u_inds])
+        println("s: ", z[model.s_inds])
+        println("y: ", z[model.y_inds])
+    end
 
-    println("u: ", z[z_to_u(scen_tree)])
-
-    println("s: ", z[z_to_s(scen_tree)])
-
-    println("y: ", z[z_to_y(scen_tree, 4)])
-
-    return z[
-        1:scen_tree.n * scen_tree.n_x
-    ], z[z_to_u(scen_tree)] 
+    return z[model.x_inds], z[model.u_inds] 
 end
