@@ -32,6 +32,13 @@ struct DYNAMICS_IN_L_MODEL{T, U} <: CUSTOM_SOLVER_MODEL
     u_inds :: Vector{Int64}
     s_inds :: Vector{Int64}
     y_inds :: Vector{Int64}
+    inds_4a :: Vector{Union{UnitRange{Int64}, Int64}}
+    inds_4b :: Vector{Union{UnitRange{Int64}, Int64}}
+    inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
+    b_bars :: Vector{Vector{Float64}}
+    inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
+    Q_bars :: Vector{Any}
+    inds_4e :: UnitRange{Int64}
 end
 
 """
