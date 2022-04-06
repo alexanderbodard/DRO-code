@@ -11,13 +11,10 @@ function build_mosek_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: 
     set_silent(model)
 
     @variable(model, x[i=1:scen_tree.n * scen_tree.n_x])
-    @variable(model, u[i=1:scen_tree.n_non_leaf_nodes * scen_tree.n_u])
+    @variable(model, u[i=1:(length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u])
     @variable(model, s[i=1:scen_tree.n * 1])
 
     @objective(model, Min, s[1])
-
-    # TODO: Initial condition should be moved to the call step
-    @constraint(model, intial_condition[i=1:1], x[i] .== [2.][i])
 
     # Impose cost
     impose_cost(model, scen_tree, cost)
@@ -35,8 +32,10 @@ end
 This function solves a Mosek model
 """
 function solve_model(model :: Model, x0 :: Vector{Float64}, tol :: Float64 = 1e-8)
-    # TODO: Use x0
     # TODO: Use tol
+
+    # Initial condition
+    @constraint(model, intial_condition[i=1:length(x0)], model[:x][i] .== x0[i])
 
     optimize!(model)
     return value.(model[:x]), value.(model[:u]), value.(model[:s]), value.(model[:y])
