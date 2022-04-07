@@ -139,8 +139,9 @@ function construct_L_4d(scen_tree :: ScenarioTree)
         uus = []
         sss = [ss[k]]
 
+        n = k
         for _ = length(scen_tree.min_index_per_timestep)-1:-1:1
-            n = scen_tree.anc_mapping[k]
+            n = scen_tree.anc_mapping[n]
             pushfirst!(xxs, xx[node_to_x(scen_tree, n)]...)
             pushfirst!(uus, uu[node_to_timestep(scen_tree, n)]...)
         end
@@ -190,7 +191,7 @@ function construct_L_4e(scen_tree :: ScenarioTree, dynamics :: Dynamics, n_z :: 
         # B
         AI, AJ, AV = findnz(B)
         append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ (scen_tree.n_u * (anc_node - 1)) .+ u_offset)
+        append!(L_J, AJ .+ (scen_tree.n_u * (node_to_timestep(scen_tree, anc_node) - 1)) .+ u_offset)
         append!(L_V, AV)
 
         I_offset += size(A)[1]
@@ -353,7 +354,7 @@ function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
     return z - projection(model, x0, z * gamma) / gamma
 end
 
-function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; DEBUG :: Bool = false, tol :: Float64 = 1e-12)
+function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; DEBUG :: Bool = false, tol :: Float64 = 1e-12, MAX_ITER_COUNT :: Int64 = 20000)
     n_z = length(x)
     n_L = length(v)
 
@@ -371,17 +372,17 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
     # gamma = 0.4
     # Sigma = sigma * sparse(LA.I(n_L))
     # Gamma = gamma * sparse(LA.I(n_z))
-    lambda = 0.5
+    lambda = 0.9
 
     sigma = sqrt(0.9 / model.L_norm)
     gamma = sigma
 
-    # if (sigma * gamma * model.L_norm > 1)
-    #     error("sigma and gamma are not chosen correctly")
-    # end
+    if (sigma * gamma * model.L_norm > 1)
+        error("sigma and gamma are not chosen correctly")
+    end
 
     if DEBUG
-        plot_vector = zeros(20000, n_z)
+        plot_vector = zeros(MAX_ITER_COUNT, n_z)
         nx = length(model.x_inds)
         nu = length(model.u_inds)
         ns = length(model.s_inds)
@@ -391,7 +392,7 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
 
     # TODO: Work with some tolerance
     counter = 0
-    while counter < 20000
+    while counter < MAX_ITER_COUNT
         x_old = copy(x) # TODO: Check Julia behaviour
 
         xbar = x - L_mult(model, gamma .* v, true) - Gamma_grad_mult(model, x, gamma)
@@ -430,7 +431,7 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
         filename = "debug_x_res.png"
         savefig(filename)
 
-        plot(plot_vector[1:counter, 1:3], fmt = :png, labels=["x"])
+        plot(plot_vector[1:counter, 1 : nx], fmt = :png, labels=["x"])
         filename = "debug_x.png"
         savefig(filename)
 
@@ -445,6 +446,40 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
         plot(plot_vector[1:counter, nx + nu + ns + 1 : nx + nu + ns + ny], fmt = :png, labels=["y"])
         filename = "debug_y.png"
         savefig(filename)
+    
+        # # Check whether the constraints are correctly imposed
+        # println("--------")
+        # println("Verifying 4a - 4c: Risk epigraph constraints...")
+        # H = model.L[
+        #     1 : (size(rms[1].A)[2] + length(rms[1].b)) * scen_tree.n_non_leaf_nodes, 1:end
+        # ]
+        # println("Should be smaller than zero: ", maximum(H * x))
+
+        # for i = 1:scen_tree.n_non_leaf_nodes
+        #     z_temp = vcat(-x[nx + nu + 1 : nx + nu + ns][i], -x[nx + nu + ns + 1 : nx + nu + ns + ny][(i - 1) * length(rms[1].b) + 1 : i * length(rms[1].b)])            
+        #     b_bar = model.b_bars[i]
+        #     dot_p = LA.dot(z_temp, b_bar)
+        #     if dot_p > 0
+        #         println("4c has been violated, dot product equals $(dot_p) at iteration $(i)!!!")
+        #         println("B_bar equals $(b_bar), x_bar equals $(z_temp)")
+        #     end
+        # end
+
+        # println("--------")
+        # println("Verifying 4d: cost")
+
+
+        # println("--------")
+        # println("Verifying 4e: dynamics...")
+        # H = model.L[
+        #     end - nx + 1: end - length(x0), 1:nx + nu
+        # ]
+
+        # println("Dynamics matrix structure: ", H)
+        # println(maximum(H * x[1:nx+nu]))
+        # println(maximum(H * vcat(x_ref, u_ref)))
+
+        # println("-------")
     end
 
     return x
