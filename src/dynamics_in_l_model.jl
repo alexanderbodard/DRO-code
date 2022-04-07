@@ -246,8 +246,6 @@ function bisection_method!(g_lb, g_ub, tol, psi)
     #     g_ub *= 2
     # end
 
-    # println(g_ub)
-
     if ( psi(g_lb) + tol ) * ( psi(g_ub) - tol ) > 0 # only work up to a precision of the tolerance
         error("Incorrect initial interval. Found $(psi(g_lb)) and $(psi(g_ub)) which results in $(( psi(g_lb) + tol ) * ( psi(g_ub) - tol ))")
     end
@@ -292,16 +290,22 @@ function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, gam
 end
 
 function prox_f(Q, gamma, z_temp)
-    I, J, V = findnz(Q)
-    n_Q_x, n_Q_y = size(Q)
-    M_temp = sparse(I, J, 1 ./ (V .+ (1 ./ gamma)), n_Q_x, n_Q_y)
-    return M_temp * (z_temp ./ gamma)
+    # I, J, V = findnz(Q)
+    # return 1 ./ (V .+ (1 ./ gamma)) .* (z_temp ./ gamma)
+
+    return 1 ./ (Q .+ (1 ./ gamma)) .* (z_temp ./ gamma)
 end
 
 function psi(Q, gamma, z_temp, s)
     temp = prox_f(Q, gamma, z_temp)
 
-    return 0.5 * temp' * Q * temp - gamma - s
+    # return 0.5 * temp' * Q * temp - gamma - s
+    # return 0.5 * sum(Q .* temp.^2) - gamma - s
+    res = - gamma - s
+    for i = 1:length(Q)
+        res += 0.5 * Q[i] * temp[i]^2
+    end
+    return res
 end
 
 function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64})
@@ -329,7 +333,7 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
         z_temp = z[ind]
         s = z[ind[end] + 1]
 
-        f = 0.5 * z_temp' * model.Q_bars[scen_ind] * z_temp
+        f = 0.5 * sum(model.Q_bars[scen_ind] .* (z_temp.^2))
         if f > s
             local g_lb = 1e-12 # TODO: How close to zero?
             local g_ub = f - s #1. TODO: Can be tighter with gamma
@@ -548,6 +552,7 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
     T = length(scen_tree.min_index_per_timestep)
     Q_bars = []
+    Q_bars_old = []
     # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
     for scen_ind = 1:length(scenarios)
         scenario = scenarios[scen_ind]
@@ -576,10 +581,13 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
             end
         end
 
-        append!(Q_bars, [sparse(L_I, L_J, L_V, 
+        append!(Q_bars_old, [sparse(L_I, L_J, L_V, 
             length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u, 
             length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
         )])
+    end
+    for i = 1:length(Q_bars_old)
+        append!(Q_bars, [[Q_bars_old[i][j, j] for j = 1:size(Q_bars_old[i])[1]]])
     end
 
     # Compute projection

@@ -69,22 +69,22 @@ module DRO
     # Formulate the optimization problem
     ###
 
-    reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
+    # reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
     model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
 
     ###
     # Solve the optimization problem
     ###
 
-    # @time solve_model(reference_model, [0.])
-    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
-    println("x_ref: ", x_ref)
-    println("u_ref", u_ref)
+    # @time solve_model(reference_model, [2., 2.])
+    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
+    # println("x_ref: ", x_ref)
+    # println("u_ref", u_ref)
 
-    # @time solve_model(model, [0.])
+    # @time solve_model(model, [2., 2.])
     x, u = solve_model(model, [2., 2.], verbose=false)
-    println("x: ", x)
-    println("u: ", u)
+    # println("x: ", x)
+    # println("u: ", u)
 
     # plot_scen_tree_x(scen_tree, x, "x")
     # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")
