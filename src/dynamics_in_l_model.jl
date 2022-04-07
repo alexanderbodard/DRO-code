@@ -241,18 +241,18 @@ Performs a bisection method.
 Func must be callable.
 g_lb and g_ub will be altered by calling this function.
 """
-function bisection_method!(g_lb, g_ub, tol, psi)
+function bisection_method!(g_lb, g_ub, tol, Q, z_temp, s)
     # while psi(g_lb)*psi(g_ub) > 0
     #     g_ub *= 2
     # end
 
-    if ( psi(g_lb) + tol ) * ( psi(g_ub) - tol ) > 0 # only work up to a precision of the tolerance
-        error("Incorrect initial interval. Found $(psi(g_lb)) and $(psi(g_ub)) which results in $(( psi(g_lb) + tol ) * ( psi(g_ub) - tol ))")
+    if ( psi(Q, g_lb, z_temp, s) + tol ) * ( psi(Q, g_ub, z_temp, s) - tol ) > 0 # only work up to a precision of the tolerance
+        error("Incorrect initial interval. Found $(psi(Q, g_lb, z_temp, s)) and $(psi(Q, g_ub, z_temp, s)) which results in $(( psi(Q, g_lb, z_temp, s) + tol ) * ( psi(Q, g_ub, z_temp, s) - tol ))")
     end
 
     while abs(g_ub-g_lb) > tol
         g_new = (g_lb + g_ub) / 2.
-        if psi(g_lb) * psi(g_new) < 0
+        if psi(Q, g_lb, z_temp, s) * psi(Q, g_new, z_temp, s) < 0
             g_ub = g_new
         else
             g_lb = g_new
@@ -294,6 +294,13 @@ function prox_f(Q, gamma, z_temp)
     # return 1 ./ (V .+ (1 ./ gamma)) .* (z_temp ./ gamma)
 
     return 1 ./ (Q .+ (1 ./ gamma)) .* (z_temp ./ gamma)
+    
+    res = copy(z_temp)
+    for i = 1:length(res)
+        res[i] /= gamma
+        res[i] /= (Q[i] + 1. / gamma)
+    end
+    return res
 end
 
 function psi(Q, gamma, z_temp, s)
@@ -337,7 +344,7 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
         if f > s
             local g_lb = 1e-12 # TODO: How close to zero?
             local g_ub = f - s #1. TODO: Can be tighter with gamma
-            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, gamma -> psi(model.Q_bars[scen_ind], gamma, z_temp, s))
+            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s)
             z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp), s + gamma_star
         end
 
