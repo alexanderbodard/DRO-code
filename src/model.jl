@@ -39,6 +39,7 @@ struct DYNAMICS_IN_L_MODEL{T} <: CUSTOM_SOLVER_MODEL
     inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
     Q_bars :: Vector{Any}
     inds_4e :: UnitRange{Int64}
+    workspace_vec :: Vector{Float64}
 end
 
 """

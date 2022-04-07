@@ -241,18 +241,18 @@ Performs a bisection method.
 Func must be callable.
 g_lb and g_ub will be altered by calling this function.
 """
-function bisection_method!(g_lb, g_ub, tol, Q, z_temp, s)
+function bisection_method!(g_lb, g_ub, tol, Q, z_temp, s, workspace_vec)
     # while psi(g_lb)*psi(g_ub) > 0
     #     g_ub *= 2
     # end
 
-    if ( psi(Q, g_lb, z_temp, s) + tol ) * ( psi(Q, g_ub, z_temp, s) - tol ) > 0 # only work up to a precision of the tolerance
-        error("Incorrect initial interval. Found $(psi(Q, g_lb, z_temp, s)) and $(psi(Q, g_ub, z_temp, s)) which results in $(( psi(Q, g_lb, z_temp, s) + tol ) * ( psi(Q, g_ub, z_temp, s) - tol ))")
+    if ( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ) > 0 # only work up to a precision of the tolerance
+        error("Incorrect initial interval. Found $(psi(Q, g_lb, z_temp, s, workspace_vec)) and $(psi(Q, g_ub, z_temp, s, workspace_vec)) which results in $(( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ))")
     end
 
     while abs(g_ub-g_lb) > tol
         g_new = (g_lb + g_ub) / 2.
-        if psi(Q, g_lb, z_temp, s) * psi(Q, g_new, z_temp, s) < 0
+        if psi(Q, g_lb, z_temp, s, workspace_vec) * psi(Q, g_new, z_temp, s, workspace_vec) < 0
             g_ub = g_new
         else
             g_lb = g_new
@@ -289,28 +289,23 @@ function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, gam
     return gamma .* temp
 end
 
-function prox_f(Q, gamma, z_temp)
-    # I, J, V = findnz(Q)
-    # return 1 ./ (V .+ (1 ./ gamma)) .* (z_temp ./ gamma)
-
-    return 1 ./ (Q .+ (1 ./ gamma)) .* (z_temp ./ gamma)
-    
-    res = copy(z_temp)
-    for i = 1:length(res)
-        res[i] /= gamma
-        res[i] /= (Q[i] + 1. / gamma)
+function prox_f(Q, gamma, z_temp, workspace_vec)
+    copyto!(workspace_vec, z_temp)
+    for i = 1:length(z_temp)
+        workspace_vec[i] /= gamma
+        workspace_vec[i] /= (Q[i] + 1. / gamma)
     end
-    return res
+    return workspace_vec
 end
 
-function psi(Q, gamma, z_temp, s)
-    temp = prox_f(Q, gamma, z_temp)
+function psi(Q, gamma, z_temp, s, workspace_vec)
+    workspace_vec = prox_f(Q, gamma, z_temp, workspace_vec)
 
     # return 0.5 * temp' * Q * temp - gamma - s
     # return 0.5 * sum(Q .* temp.^2) - gamma - s
     res = - gamma - s
     for i = 1:length(Q)
-        res += 0.5 * Q[i] * temp[i]^2
+        res += 0.5 * Q[i] * workspace_vec[i]^2
     end
     return res
 end
@@ -340,12 +335,20 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
         z_temp = z[ind]
         s = z[ind[end] + 1]
 
-        f = 0.5 * sum(model.Q_bars[scen_ind] .* (z_temp.^2))
+        # f = 0.5 * sum(model.Q_bars[scen_ind] .* (z_temp.^2))
+        f = 0
+        for i = 1:length(z_temp)
+            model.workspace_vec[i] = z_temp[i]
+            model.workspace_vec[i] *= z_temp[i]
+            model.workspace_vec[i] *= model.Q_bars[scen_ind][i]
+            f += model.workspace_vec[i]
+        end
+        f *= 0.5
         if f > s
             local g_lb = 1e-12 # TODO: How close to zero?
             local g_ub = f - s #1. TODO: Can be tighter with gamma
-            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s)
-            z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp), s + gamma_star
+            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s, model.workspace_vec)
+            z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp, model.workspace_vec), s + gamma_star
         end
 
         # ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
@@ -641,7 +644,11 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
         b_bars,
         inds_4d,
         Q_bars,
-        inds_4e
+        inds_4e,
+        zeros(
+            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + 
+            (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
+        )
     )
 end
 
