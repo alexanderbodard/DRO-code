@@ -292,8 +292,7 @@ end
 function prox_f(Q, gamma, z_temp, workspace_vec)
     copyto!(workspace_vec, z_temp)
     for i = 1:length(z_temp)
-        workspace_vec[i] /= gamma
-        workspace_vec[i] /= (Q[i] + 1. / gamma)
+        workspace_vec[i] /= gamma * (Q[i] + 1. / gamma)
     end
     return workspace_vec
 end
@@ -317,9 +316,8 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
     end
 
     # 4b
-    for ind in model.inds_4b
-        z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(4)) # TODO: Fix polar cone
-    end
+    z[model.inds_4b] = MOD.projection_on_set(MOD.DefaultDistance(), z[model.inds_4b], MOI.Nonpositives(4)) # TODO: Fix polar cone
+    
 
     # 4c
     for (i, ind) in enumerate(model.inds_4c)
@@ -404,16 +402,32 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
         xinit = copy(x[1:nx])
     end
 
+    x_workspace = copy(x)
+    v_workspace = copy(v)
+
     # TODO: Work with some tolerance
     counter = 0
     while counter < MAX_ITER_COUNT
         x_old = copy(x) # TODO: Check Julia behaviour
 
-        xbar = x - L_mult(model, gamma .* v, true) - Gamma_grad_mult(model, x, gamma)
-        vbar = prox_hstar(model, x0, v + L_mult(model, sigma .* (2 * xbar - x)), 1 ./ sigma)
+        copyto!(v_workspace, v)
+        for i = 1:length(v)
+            v_workspace[i] *= gamma
+        end
+        xbar = x - L_mult(model, v_workspace, true) - Gamma_grad_mult(model, x, gamma)
+        
+        for i = 1:length(x)
+            x_workspace[i] = sigma * (2 * xbar[i] - x[i])
+        end
+        vbar = prox_hstar(model, x0, v + L_mult(model, x_workspace), 1 ./ sigma)
 
         x = lambda * xbar + (1 - lambda) * x
-        v = lambda * vbar + (1 - lambda) * v
+
+        for i = 1:length(v)
+            v[i] *= (1 - lambda)
+            v[i] += lambda * vbar[i]
+        end
+        # v = lambda * vbar + (1 - lambda) * v
 
         if DEBUG
             plot_vector[counter + 1, 1:end] = x
@@ -525,13 +539,13 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     end
 
     # 4b
-    inds_4b = Union{UnitRange{Int64}, Int64}[]
+    inds_4b_start = offset + 1
     for k = 1:scen_tree.n_non_leaf_nodes
         n_z_part = length(rms[k].b)
-        ind = offset + 1 : offset + n_z_part
-        append!(inds_4b, [ind])
         offset += n_z_part
     end
+    inds_4b_end = offset
+    inds_4b = inds_4b_start : inds_4b_end
 
     # 4c
     inds_4c = Union{UnitRange{Int64}, Int64}[]
