@@ -380,12 +380,7 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
     Choose sigma and gamma such that
     sigma * gamma * model.L_norm < 1
     """
-    # sigma = 0.4
-    # gamma = 0.4
-    # Sigma = sigma * sparse(LA.I(n_L))
-    # Gamma = gamma * sparse(LA.I(n_z))
     lambda = 0.9
-
     sigma = sqrt(0.9 / model.L_norm)
     gamma = sigma
 
@@ -633,18 +628,6 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
 
     return DYNAMICS_IN_L_MODEL(
         L,
-        # (z, gamma) -> begin
-        #     # if log
-        #     #     println("-----------------")
-        #     #     println("Projection: ", gamma * proj(z / gamma, false)[12:21])
-        #     #     println("z: ", z[12:21] / gamma)
-        #     #     println("full z", z / gamma)
-        #     #     # println("At index 12: ", z[12])
-        #     #     # println((gamma * proj(z / gamma))[12])
-        #     # end
-        #     # res = z - projection(scen_tree, rms, cost, z * gamma) / gamma
-        #     res
-        # end,
         L_norm,
         n_z,
         n_L,
