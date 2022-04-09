@@ -76,14 +76,14 @@ module DRO
     # Solve the optimization problem
     ###
 
-    @time solve_model(reference_model, [2., 2.])
-    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
+    # @time solve_model(reference_model, [2., 2.])
+    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
     # println("x_ref: ", x_ref)
     # println("u_ref", u_ref)
 
     @time solve_model(model, [2., 2.])
     @time solve_model(model, [2., 2.])
-    # x, u = solve_model(model, [2., 2.], verbose=false)
+    x, u = solve_model(model, [2., 2.], verbose=true)
     # println("x: ", x)
     # println("u: ", u)
 

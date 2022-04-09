@@ -363,10 +363,89 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
 end
 
 function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64}, gamma :: Float64)
-    return z - projection(model, x0, z * gamma) / gamma
+    return z - projection(model, x0, z / gamma) * gamma
 end
 
-function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; DEBUG :: Bool = false, tol :: Float64 = 1e-12, MAX_ITER_COUNT :: Int64 = 20000)
+"""
+Closely follows SuperMann paper Algorithm 3
+
+- k is the number of elements in S and Stilde when calling this function
+
+"""
+function restarted_broyden!(
+    S :: Vector{Float64}, 
+    Stilde :: Vector{Float64}, 
+    s :: Vector{Float64},
+    s_tilde :: Vector{Float64},
+    y :: Vector{Float64}, 
+    rx :: Vector{Float64},
+    d :: Vector{Float64},
+    k :: Int64; 
+    MAX_K :: Int64 = 20,
+    theta_bar :: Float64 = 0.2
+)
+    nrx = length(rx)
+
+    # Initialize d and s_tilde
+    copyto!(d, -rx)
+    copyto!(s_tilde, y)
+
+    # Loop over the given sets S and Stilde
+    if k >= 1
+        for i = 1:k
+            inds = (i - 1) * nrx + 1 : i * nrx
+            s_tilde += LA.dot(S[inds], s_tilde) * Stilde[inds]
+            d += LA.dot(S[inds], d) * Stilde[inds]
+        end
+    end
+
+    # Compute theta
+    gamma = LA.dot(s_tilde, s) / LA.norm(s)^2
+    if abs(gamma) >= theta_bar
+        theta = 1
+    elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
+        theta = (1 - theta_bar)
+    else
+        theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
+    end
+
+    # Compute final s_tilde and d
+    s_tilde = theta / (1 - theta + theta * gamma) / LA.norm(s)^2 * (s - s_tilde)
+    d += LA.dot(s, d) * s_tilde
+
+    # Update sets S and S_tilde and counter k
+    if k === MAX_K
+        k = 0
+        # Clear sets
+        # Well, let's not actually do this but just reset the index
+    else
+        k += 1
+        # Update sets
+        S[(k - 1) * nrx + 1 : k * nrx] = s
+        Stilde[(k - 1) * nrx + 1 : k * nrx] = s_tilde
+    end
+end
+
+function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
+    return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
+end
+
+function primal_dual_alg(
+    x, 
+    v, 
+    model :: DYNAMICS_IN_L_MODEL, 
+    x0 :: Vector{Float64}; 
+    DEBUG :: Bool = false, 
+    tol :: Float64 = 1e-12, 
+    MAX_ITER_COUNT :: Int64 = 50000,
+    SUPERMANN :: Bool = true,
+    SUPERMANN_BACKTRACKING_MAX :: Int64 = 8,
+    beta :: Float64 = 0.5,
+    MAX_BROYDEN_K :: Int64 = 20,
+    c0 :: Float64 = 0.99,
+    c1 :: Float64 = 0.99,
+    q :: Float64 = 0.99
+)
     n_z = length(x)
     n_L = length(v)
 
@@ -382,6 +461,7 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
     """
     lambda = 0.9
     sigma = sqrt(0.9 / model.L_norm)
+    sigma_inv = 1 / sigma
     gamma = sigma
 
     if (sigma * gamma * model.L_norm > 1)
@@ -400,35 +480,180 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
     x_workspace = copy(x)
     v_workspace = copy(v)
 
+    if SUPERMANN
+
+        r_norm = 0
+        # eta = 0     # Correct initial value is set during first iteration
+        r_safe = Inf  # Correct initial value is set during first iteration
+        broyden_k = 0
+
+        wx = zeros(length(x))
+        wv = zeros(length(v))
+        wxbar = zeros(length(x))
+        wvbar = zeros(length(v))
+        d_x = zeros(length(x))
+        d_v = zeros(length(v))
+        r_x = zeros(length(x))
+        r_v = zeros(length(v))
+        r_wx = zeros(length(x))
+        r_wv = zeros(length(v))
+
+        Sx = zeros(length(x) * MAX_BROYDEN_K)
+        Sv = zeros(length(x) * MAX_BROYDEN_K)
+        Stildex = zeros(length(x) * MAX_BROYDEN_K)
+        Stildev = zeros(length(x) * MAX_BROYDEN_K)
+    end
+
     # TODO: Work with some tolerance
     counter = 0
     while counter < MAX_ITER_COUNT
-        x_old = copy(x) # TODO: Check Julia behaviour
 
+        # Compute xbar
         copyto!(v_workspace, v)
         for i = 1:length(v)
             v_workspace[i] *= gamma
         end
         xbar = x - L_mult(model, v_workspace, true) - Gamma_grad_mult(model, x, gamma)
-        
+
+        # Compute vbar
         for i = 1:length(x)
             x_workspace[i] = sigma * (2 * xbar[i] - x[i])
         end
-        vbar = prox_hstar(model, x0, v + L_mult(model, x_workspace), 1 ./ sigma)
 
-        x = lambda * xbar + (1 - lambda) * x
+        vbar = prox_hstar(model, x0, v + L_mult(model, x_workspace), sigma)
 
-        for i = 1:length(v)
-            v[i] *= (1 - lambda)
-            v[i] += lambda * vbar[i]
+        # Compute the residual
+        r_x = x - xbar
+        r_v = v - vbar
+        # r_norm = sqrt(LA.norm(r_x)^2 + LA.norm(r_v)^2)
+        r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
+
+        # # Initialize eta and r_safe during first iteration
+        # if counter === 0
+        #     eta = r_norm
+        #     r_safe = r_norm
+        # end
+
+        # Update
+        if SUPERMANN
+            """
+            This implementation closely follows Algorithm 2 of the SuperMann paper.
+            """
+            # Choose an update direction
+            restarted_broyden!(
+                Sx,
+                Stildex,
+                wx - x,
+                x_workspace, # Workspace for s_tilde
+                r_wx - r_x,
+                r_x,
+                d_x,
+                broyden_k,
+                MAX_K = MAX_BROYDEN_K
+                
+            )
+
+            restarted_broyden!(
+                Sv,
+                Stildev,
+                wv - v,
+                v_workspace, # workspace for s_tilde
+                r_wv - r_v,
+                r_v,
+                d_v,
+                0, # Only one counter is needed
+                MAX_K = MAX_BROYDEN_K
+            )
+
+            if broyden_k === MAX_BROYDEN_K
+                broyden_k = 0
+            else
+                broyden_k += 1
+            end
+            # println("--------")
+            # println(broyden_k)
+            # println(d_x)
+
+            # Update tau (eta remains unchanged)
+            tau = 1
+
+            # Educated and GKM iterations
+            loop = true
+            backtrack_count = 0
+            while loop && backtrack_count < SUPERMANN_BACKTRACKING_MAX
+                wx = x + tau * d_x
+                wv = v + tau * d_v
+
+                wxbar = wx - L_mult(model, wv * gamma, true) - Gamma_grad_mult(model, wx, gamma)
+                wvbar = prox_hstar(model, x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
+
+                r_wx = wx - wxbar
+                r_wv = wv - wvbar
+                # rtilde_norm = sqrt(LA.norm(r_wx)^2 + LA.norm(r_wv)^2)
+                rtilde_norm = sqrt(p_norm(r_wx, r_wv, r_wx, r_wv, model.L, gamma, sigma))
+
+                # println("rtilde_norm: $(rtilde_norm), r_norm: $(r_norm), r_safe = $(r_safe)")
+
+                # Check for educated update
+                if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
+                    println("Educated update with tau = $(tau) in iteration $(counter)!")
+                    copyto!(x, wx)
+                    copyto!(v, wv)
+                    r_safe = rtilde_norm + q^counter
+                    # println("Educated update")
+                    loop = false
+                    break
+                end
+                # Check for GKM update
+                # rho = LA.dot(vcat(r_wx, r_wv), vcat(r_wx, r_wv) - tau * vcat(d_x, d_v))
+                rho = p_norm(r_wx, r_wv, r_wx - tau * d_x, r_wv - tau * d_v, model.L, gamma, sigma)
+                if rho >= 0.1 * r_norm * rtilde_norm
+                    # println("GKM update in iteration $(counter)!")
+                    # println("Rho = $(rho), must be larger than $(0.1 * r_norm * rtilde_norm)")
+                    rho = lambda * rho / rtilde_norm^2
+                    x += - rho * r_wx
+                    v += -rho * r_wv
+                    # println("GKM update")
+                    loop = false
+                    break
+                end
+                # Backtrack
+                tau *= beta
+                backtrack_count += 1
+            end
+            if loop === true
+                println("Maximum number of backtracking attained. Nominal update in iteration $(counter)")
+                # Update x by avering step
+                x = lambda * xbar + (1 - lambda) * x
+
+                # Update v by avering step
+                for i = 1:length(v)
+                    v[i] *= (1 - lambda)
+                    v[i] += lambda * vbar[i]
+                end
+            end
+            if loop === false
+                # println("Supermann in action in iteration $(counter)!")
+            end
+        else
+            """
+            Vanilla CP
+            """
+            # Update x by avering step
+            x = lambda * xbar + (1 - lambda) * x
+
+            # Update v by avering step
+            for i = 1:length(v)
+                v[i] *= (1 - lambda)
+                v[i] += lambda * vbar[i]
+            end
         end
-        # v = lambda * vbar + (1 - lambda) * v
 
         if DEBUG
             plot_vector[counter + 1, 1:end] = x
         end
 
-        if LA.norm((x - x_old)) / LA.norm(x) < tol
+        if r_norm / LA.norm(x) < tol
             println("Breaking!", counter)
             break
         end
@@ -454,21 +679,21 @@ function primal_dual_alg(x, v, model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float6
         filename = "debug_x_res.png"
         savefig(filename)
 
-        plot(plot_vector[1:counter, 1 : nx], fmt = :png, labels=["x"])
-        filename = "debug_x.png"
-        savefig(filename)
+        # plot(plot_vector[1:counter, 1 : nx], fmt = :png, labels=["x"])
+        # filename = "debug_x.png"
+        # savefig(filename)
 
-        plot(plot_vector[1:counter, nx + 1 : nx + nu], fmt = :png, labels=["u"])
-        filename = "debug_u.png"
-        savefig(filename)
+        # plot(plot_vector[1:counter, nx + 1 : nx + nu], fmt = :png, labels=["u"])
+        # filename = "debug_u.png"
+        # savefig(filename)
 
-        plot(plot_vector[1:counter, nx + nu + 1 : nx + nu + ns], fmt = :png, labels=["s"])
-        filename = "debug_s.png"
-        savefig(filename)
+        # plot(plot_vector[1:counter, nx + nu + 1 : nx + nu + ns], fmt = :png, labels=["s"])
+        # filename = "debug_s.png"
+        # savefig(filename)
 
-        plot(plot_vector[1:counter, nx + nu + ns + 1 : nx + nu + ns + ny], fmt = :png, labels=["y"])
-        filename = "debug_y.png"
-        savefig(filename)
+        # plot(plot_vector[1:counter, nx + nu + ns + 1 : nx + nu + ns + ny], fmt = :png, labels=["y"])
+        # filename = "debug_y.png"
+        # savefig(filename)
     
         # # Check whether the constraints are correctly imposed
         # println("--------")
@@ -649,7 +874,7 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     )
 end
 
-function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false)
+function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false)
     z = zeros(model.nz)
     v = zeros(model.nv)
 
