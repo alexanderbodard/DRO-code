@@ -343,7 +343,7 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
         end
         f *= 0.5
         if f > s
-            local g_lb = 1e-12 # TODO: How close to zero?
+            local g_lb = 1e-8 # TODO: How close to zero?
             local g_ub = f - s #1. TODO: Can be tighter with gamma
             gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s, model.workspace_vec)
             z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp, model.workspace_vec), s + gamma_star
@@ -430,6 +430,10 @@ function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
     return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
 end
 
+function sherman_morrison(H, delta_z, delta_R)
+    return H + (delta_z - H * delta_R) / (delta_z' * H * delta_R) * delta_z' * H
+end
+
 function primal_dual_alg(
     x, 
     v, 
@@ -468,13 +472,14 @@ function primal_dual_alg(
         error("sigma and gamma are not chosen correctly")
     end
 
-    if DEBUG
+    if true
         plot_vector = zeros(MAX_ITER_COUNT, n_z)
         nx = length(model.x_inds)
         nu = length(model.u_inds)
         ns = length(model.s_inds)
         ny = length(model.y_inds)
         xinit = copy(x[1:nx])
+        residuals = zeros(MAX_ITER_COUNT)
     end
 
     x_workspace = copy(x)
@@ -502,6 +507,10 @@ function primal_dual_alg(
         Sv = zeros(length(x) * MAX_BROYDEN_K)
         Stildex = zeros(length(x) * MAX_BROYDEN_K)
         Stildev = zeros(length(x) * MAX_BROYDEN_K)
+
+        xold = ones(length(x) + length(v))
+        xresold = ones(length(x) + length(v))
+        H = LA.I(length(x) + length(v))
     end
 
     # TODO: Work with some tolerance
@@ -540,30 +549,40 @@ function primal_dual_alg(
             This implementation closely follows Algorithm 2 of the SuperMann paper.
             """
             # Choose an update direction
-            restarted_broyden!(
-                Sx,
-                Stildex,
-                wx - x,
-                x_workspace, # Workspace for s_tilde
-                r_wx - r_x,
-                r_x,
-                d_x,
-                broyden_k,
-                MAX_K = MAX_BROYDEN_K
+            # restarted_broyden!(
+            #     Sx,
+            #     Stildex,
+            #     wx - x,
+            #     x_workspace, # Workspace for s_tilde
+            #     r_wx - r_x,
+            #     r_x,
+            #     d_x,
+            #     broyden_k,
+            #     MAX_K = MAX_BROYDEN_K
                 
-            )
+            # )
 
-            restarted_broyden!(
-                Sv,
-                Stildev,
-                wv - v,
-                v_workspace, # workspace for s_tilde
-                r_wv - r_v,
-                r_v,
-                d_v,
-                0, # Only one counter is needed
-                MAX_K = MAX_BROYDEN_K
-            )
+            # restarted_broyden!(
+            #     Sv,
+            #     Stildev,
+            #     wv - v,
+            #     v_workspace, # workspace for s_tilde
+            #     r_wv - r_v,
+            #     r_v,
+            #     d_v,
+            #     0, # Only one counter is needed
+            #     MAX_K = MAX_BROYDEN_K
+            # )
+
+            H = sherman_morrison(H, vcat(x, v) - xold, vcat(x - xbar, v - vbar) - xresold)
+            # H = sherman_morrison(H, vcat(wx, wv) - vcat(x, v), vcat(r_wx, r_wv) - vcat(r_x, r_v))
+            xold = vcat(x, v)
+            xresold = vcat(x - xbar, v - vbar)
+
+            d_x = -H[1:length(x), 1:end] * vcat(r_x, r_v)
+            d_v = -H[length(x)+1 : end, 1:end] * vcat(r_x, r_v)
+
+            # println(d_x)
 
             if broyden_k === MAX_BROYDEN_K
                 broyden_k = 0
@@ -596,7 +615,7 @@ function primal_dual_alg(
 
                 # Check for educated update
                 if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
-                    println("Educated update with tau = $(tau) in iteration $(counter)!")
+                    # println("Educated update with tau = $(tau) in iteration $(counter)!")
                     copyto!(x, wx)
                     copyto!(v, wv)
                     r_safe = rtilde_norm + q^counter
@@ -607,9 +626,12 @@ function primal_dual_alg(
                 # Check for GKM update
                 # rho = LA.dot(vcat(r_wx, r_wv), vcat(r_wx, r_wv) - tau * vcat(d_x, d_v))
                 rho = p_norm(r_wx, r_wv, r_wx - tau * d_x, r_wv - tau * d_v, model.L, gamma, sigma)
+                rho2 = p_norm(r_wx, r_wv, wx - x, wv - v, model.L, gamma, sigma)
+                # rho2 = rtilde_norm^2# - p_norm(r_wx, r_wv, wx - x, wv - v, model.L, gamma, sigma)
                 if rho >= 0.1 * r_norm * rtilde_norm
                     # println("GKM update in iteration $(counter)!")
                     # println("Rho = $(rho), must be larger than $(0.1 * r_norm * rtilde_norm)")
+                    # println("Rho2 = $(rho2), must be larger than $(0.1 * r_norm * rtilde_norm)")
                     rho = lambda * rho / rtilde_norm^2
                     x += - rho * r_wx
                     v += -rho * r_wv
@@ -622,7 +644,7 @@ function primal_dual_alg(
                 backtrack_count += 1
             end
             if loop === true
-                println("Maximum number of backtracking attained. Nominal update in iteration $(counter)")
+                # println("Maximum number of backtracking attained. Nominal update in iteration $(counter)")
                 # Update x by avering step
                 x = lambda * xbar + (1 - lambda) * x
 
@@ -649,8 +671,9 @@ function primal_dual_alg(
             end
         end
 
-        if DEBUG
+        if true
             plot_vector[counter + 1, 1:end] = x
+            residuals[counter + 1] = r_norm
         end
 
         if r_norm / LA.norm(x) < tol
@@ -658,6 +681,14 @@ function primal_dual_alg(
             break
         end
         counter += 1
+    end
+
+    if !DEBUG        
+        residues = Float64[]
+        for i = 1:counter
+            append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
+        end
+        plot(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["Vanilla"])
     end
 
     if DEBUG
@@ -671,13 +702,17 @@ function primal_dual_alg(
         end
 
         pgfplotsx()
-        plot(log10.(collect(1:length(fixed_point_residues))), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * log10(length(fixed_point_residues))), labels=["fixed_point_residue_x"])
-        filename = "fixed_point_residue_x.png"
-        savefig(filename)
+        # plot(collect(1:length(fixed_point_residues)), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * length(fixed_point_residues)), labels=["fixed_point_residue_x"])
+        # filename = "fixed_point_residue_x.png"
+        # savefig(filename)
 
-        plot(log10.(collect(1:length(residues))), log10.(residues), fmt = :png, xlims = (0, 1 * log10(length(residues))), labels=["residue_x"])
+        plot!(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["SuperMann"])
         filename = "debug_x_res.png"
         savefig(filename)
+
+        # plot(collect(1:length(residuals)), log10.(residuals), fmt = :png, xlims = (0, 1 * length(residuals)), labels=["residual"])
+        # filename = "residual.png"
+        # savefig(filename)
 
         # plot(plot_vector[1:counter, 1 : nx], fmt = :png, labels=["x"])
         # filename = "debug_x.png"
@@ -874,11 +909,18 @@ function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dyna
     )
 end
 
-function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false)
+function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
     z = zeros(model.nz)
     v = zeros(model.nv)
 
-    z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose)
+    if z0 !== nothing && v0 !== nothing
+        z = z0
+        v = v0
+    end
+
+    z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose, SUPERMANN=verbose)
+
+    println(model.L_norm)
 
     if verbose
         println("x: ", z[model.x_inds])
@@ -887,5 +929,8 @@ function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol ::
         println("y: ", z[model.y_inds])
     end
 
+    if return_all
+        return z, v, z[model.x_inds], z[model.u_inds]
+    end
     return z[model.x_inds], z[model.u_inds] 
 end

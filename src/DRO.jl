@@ -82,7 +82,7 @@ module DRO
     # println("u_ref", u_ref)
 
     @time solve_model(model, [2., 2.])
-    @time solve_model(model, [2., 2.])
+    # @time solve_model(model, [2., 2.])
     x, u = solve_model(model, [2., 2.], verbose=true)
     # println("x: ", x)
     # println("u: ", u)
