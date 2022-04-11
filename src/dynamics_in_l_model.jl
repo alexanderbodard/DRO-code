@@ -430,8 +430,30 @@ function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
     return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
 end
 
-function sherman_morrison(H, delta_z, delta_R)
-    return H + (delta_z - H * delta_R) / (delta_z' * H * delta_R) * delta_z' * H
+function dot_p(a, b, L, alpha1, alpha2)
+    n2, n1 = size(L)
+    ax = a[1:n1]; av = a[n1+1:end]
+    bx = b[1:n1]; bv = b[n1+1:end]
+    return p_norm(ax, av, bx, bv, L, alpha1, alpha2)
+end
+
+function sherman_morrison(H, delta_z, delta_R, L, alpha1, alpha2; theta_bar = 0.5)
+    gamma = LA.dot(H * delta_R, delta_z) / LA.norm(delta_z)^2
+    if abs(gamma) >= theta_bar
+        theta = 1
+    elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
+        theta = (1 - theta_bar)
+    else
+        theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
+    end
+
+    # y_tilde = (1 - theta) * (H \ delta_z) + theta * delta_R
+    # s_tilde = H * y_tilde
+    s_tilde = (1 - theta) * delta_z + theta * H * delta_R # With powell
+    # s_tilde = H * delta_R # without Powell
+
+    # return H + 1 / dot_p(delta_z, s_tilde, L, alpha1, alpha2) * (delta_z - (s_tilde)) * (delta_z' * H)
+    return H + 1 / (delta_z' * (s_tilde)) * (delta_z - (s_tilde)) * (delta_z' * H)
 end
 
 function primal_dual_alg(
@@ -441,7 +463,7 @@ function primal_dual_alg(
     x0 :: Vector{Float64}; 
     DEBUG :: Bool = false, 
     tol :: Float64 = 1e-12, 
-    MAX_ITER_COUNT :: Int64 = 50000,
+    MAX_ITER_COUNT :: Int64 = 200000,
     SUPERMANN :: Bool = true,
     SUPERMANN_BACKTRACKING_MAX :: Int64 = 8,
     beta :: Float64 = 0.5,
@@ -507,6 +529,11 @@ function primal_dual_alg(
         Sv = zeros(length(x) * MAX_BROYDEN_K)
         Stildex = zeros(length(x) * MAX_BROYDEN_K)
         Stildev = zeros(length(x) * MAX_BROYDEN_K)
+        S = zeros((length(x) + length(v))* MAX_BROYDEN_K)
+        Stilde = zeros((length(x) + length(v))* MAX_BROYDEN_K)
+
+        d_xv = zeros(length(x) + length(v))
+        stilde_workspace = zeros(length(x) + length(v))
 
         xold = ones(length(x) + length(v))
         xresold = ones(length(x) + length(v))
@@ -574,11 +601,25 @@ function primal_dual_alg(
             #     MAX_K = MAX_BROYDEN_K
             # )
 
-            H = sherman_morrison(H, vcat(x, v) - xold, vcat(x - xbar, v - vbar) - xresold)
-            # H = sherman_morrison(H, vcat(wx, wv) - vcat(x, v), vcat(r_wx, r_wv) - vcat(r_x, r_v))
+            ## Restarted Broyden but in one call (should be like this I think?)
+            # restarted_broyden!(
+            #     S,
+            #     Stilde,
+            #     vcat(x, v) - xold,
+            #     stilde_workspace,
+            #     vcat(x - xbar, v - vbar) - xresold,
+            #     vcat(r_x, r_v),
+            #     d_xv,
+            #     broyden_k,
+            #     MAX_K = MAX_BROYDEN_K
+            # )
+            # d_x = d_xv[1:length(x)]
+            # d_v = d_xv[length(x) + 1 : end]
+
+            # H = sherman_morrison(H, vcat(x, v) - xold, vcat(x - xbar, v - vbar) - xresold)
+            H = sherman_morrison(H, vcat(wx, wv) - xold, vcat(wx - wxbar, wv - wvbar) - xresold, model.L, gamma, sigma)
             xold = vcat(x, v)
             xresold = vcat(x - xbar, v - vbar)
-
             d_x = -H[1:length(x), 1:end] * vcat(r_x, r_v)
             d_v = -H[length(x)+1 : end, 1:end] * vcat(r_x, r_v)
 
