@@ -29,7 +29,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 3; d = 2; nx = 2; nu = 1
+    N = 2; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
@@ -77,13 +77,15 @@ module DRO
     ###
 
     # @time solve_model(reference_model, [2., 2.])
-    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
+    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
     # println("x_ref: ", x_ref)
     # println("u_ref", u_ref)
 
-    @time solve_model(model, [2., 2.])
-    # @time solve_model(model, [2., 2.])
-    x, u = solve_model(model, [2., 2.], verbose=true)
+    @time solve_model(model, [2., 2.], SUPERMANN = true)
+    @time solve_model(model, [2., 2.], SUPERMANN = true)
+    @time solve_model(model, [2., 2.], SUPERMANN = false)
+    @time solve_model(model, [2., 2.], SUPERMANN = false)
+    # x, u = solve_model(model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)
 
