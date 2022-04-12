@@ -206,6 +206,39 @@ function construct_L_4e(scen_tree :: ScenarioTree, dynamics :: Dynamics, n_z :: 
     return L_I, L_J, L_V
 end
 
+"""
+Currently doesn't support elimination of states
+"""
+function construct_L_with_dynamics(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, dynamics :: Dynamics, n_L :: Int64, n_z :: Int64)
+    n_y = length(rms[1].b)
+
+    L_I, L_J, L_V = construct_L_4a(scen_tree, rms, n_z, n_y)
+    L_II, L_JJ, L_VV = construct_L_4b(scen_tree, n_y)
+    L_III, L_JJJ, L_VVV = construct_L_4c(scen_tree, n_y)
+    L_IIII, L_JJJJ, L_VVVV = construct_L_4d(scen_tree)
+
+    append!(L_I, L_II .+ maximum(L_I))
+    append!(L_I, L_III .+ maximum(L_I))
+    append!(L_I, L_IIII .+ maximum(L_I))
+    append!(L_J, L_JJ, L_JJJ, L_JJJJ)
+    append!(L_V, L_VV, L_VVV, L_VVVV)
+
+    if 1 == 1 # TODO, add option to choose whether we include this
+        L_II, L_JJ, L_VV = construct_L_4e(scen_tree, dynamics, n_z)
+
+        append!(L_I, L_II .+ maximum(L_I))
+        append!(L_J, L_JJ)
+        append!(L_V, L_VV)
+    end
+
+    # Initial condition
+    append!(L_I, maximum(L_I) .+ collect(1:scen_tree.n_x))
+    append!(L_J, collect(1:scen_tree.n_x))
+    append!(L_V, ones(scen_tree.n_x))
+
+    return sparse(L_I, L_J, L_V, n_L, n_z)
+end
+
 ############################################################
 # Solve stage
 ############################################################
@@ -252,4 +285,103 @@ function epigraph_qcqp(Q, x, t)
 
     optimize!(model)
     return value.(model[:p]), value.(model[:s])
+end
+
+function L_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, transp :: Bool = false)
+    transp ? model.L' * z : model.L * z
+end
+
+function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, gamma :: Float64)
+    temp = zeros(length(z));
+    temp[model.s_inds[1]] = 1;
+    return gamma .* temp
+end
+
+function prox_f(Q, gamma, z_temp, workspace_vec)
+    copyto!(workspace_vec, z_temp)
+    for i = 1:length(z_temp)
+        workspace_vec[i] /= gamma * (Q[i] + 1. / gamma)
+    end
+    return workspace_vec
+end
+
+function psi(Q, gamma, z_temp, s, workspace_vec)
+    workspace_vec = prox_f(Q, gamma, z_temp, workspace_vec)
+
+    # return 0.5 * temp' * Q * temp - gamma - s
+    # return 0.5 * sum(Q .* temp.^2) - gamma - s
+    res = - gamma - s
+    for i = 1:length(Q)
+        res += 0.5 * Q[i] * workspace_vec[i]^2
+    end
+    return res
+end
+
+
+function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64})
+    # 4a
+    for ind in model.inds_4a
+        z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
+    end
+
+    # 4b
+    z[model.inds_4b] = MOD.projection_on_set(MOD.DefaultDistance(), z[model.inds_4b], MOI.Nonpositives(4)) # TODO: Fix polar cone
+    
+
+    # 4c
+    for (i, ind) in enumerate(model.inds_4c)
+        b_bar = model.b_bars[i]
+        dot_p = LA.dot(z[ind], b_bar)
+        if dot_p > 0
+            z[ind] = z[ind] - dot_p / LA.dot(b_bar, b_bar) .* b_bar
+        end
+    end
+
+    # 4d: Compute projection
+    for (scen_ind, ind) in enumerate(model.inds_4d)
+        z_temp = z[ind]
+        s = z[ind[end] + 1]
+
+        # f = 0.5 * sum(model.Q_bars[scen_ind] .* (z_temp.^2))
+        f = 0
+        for i = 1:length(z_temp)
+            model.workspace_vec[i] = z_temp[i]
+            model.workspace_vec[i] *= z_temp[i]
+            model.workspace_vec[i] *= model.Q_bars[scen_ind][i]
+            f += model.workspace_vec[i]
+        end
+        f *= 0.5
+        if f > s
+            local g_lb = 1e-8 # TODO: How close to zero?
+            local g_ub = f - s #1. TODO: Can be tighter with gamma
+            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s, model.workspace_vec)
+            z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp, model.workspace_vec), s + gamma_star
+        end
+
+        # ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
+        # z[ind], z[ind[end] + 1] = ppp, sss
+    end
+
+    # 4e: Dynamics
+    z[model.inds_4e] = zeros(length(model.inds_4e))
+
+    # Initial condition
+    z[end - length(x0) + 1 : end] = x0
+
+    return z
+end
+
+function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64}, gamma :: Float64)
+    return z - projection(model, x0, z / gamma) * gamma
+end
+
+function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
+    return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
+end
+
+function dot_p(a, b, L, alpha1, alpha2)
+    n2, n1 = size(L)
+    ax = a[1:n1]; av = a[n1+1:end]
+    bx = b[1:n1]; bv = b[n1+1:end]
+    return p_norm(ax, av, bx, bv, L, alpha1, alpha2)
 end

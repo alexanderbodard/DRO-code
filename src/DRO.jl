@@ -13,6 +13,7 @@ module DRO
     include("model.jl")
     include("custom_model.jl")
     include("dynamics_in_l_vanilla_model.jl")
+    include("dynamics_in_l_supermann_model.jl")
     include("mosek_model.jl")
     
     import MathOptInterface as MOI
@@ -71,21 +72,22 @@ module DRO
     ###
 
     reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
-    model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
+    vanilla_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
+    supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
 
     ###
     # Solve the optimization problem
     ###
 
-    # @time solve_model(reference_model, [2., 2.])
+    @time solve_model(reference_model, [2., 2.])
     # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
     # println("x_ref: ", x_ref)
     # println("u_ref", u_ref)
 
-    @time solve_model(model, [2., 2.], SUPERMANN = true)
-    @time solve_model(model, [2., 2.], SUPERMANN = true)
-    @time solve_model(model, [2., 2.], SUPERMANN = false)
-    @time solve_model(model, [2., 2.], SUPERMANN = false)
+    @time solve_model(vanilla_model, [2., 2.])
+    @time solve_model(vanilla_model, [2., 2.])
+    @time solve_model(supermann_model, [2., 2.])
+    @time solve_model(supermann_model, [2., 2.])
     # x, u = solve_model(model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)
