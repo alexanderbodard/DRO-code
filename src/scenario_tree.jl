@@ -61,6 +61,18 @@ function node_to_u(scen_tree :: ScenarioTree, i :: Int64)
     )
 end
 
+function node_to_s(scen_tree :: ScenarioTree, i :: Int64)
+    return collect(
+        (i - 1) * 1 + 1 : i * 1
+    )
+end
+
+function node_to_y(scen_tree :: ScenarioTree, i :: Int64, ny :: Int64)
+    return collect(
+        (i - 1) * ny + 1 : i * ny
+    )
+end
+
 function node_to_timestep(scen_tree :: ScenarioTree, i :: Int64)
     for j = 1:length(scen_tree.min_index_per_timestep)
         if (i < scen_tree.min_index_per_timestep[j])
@@ -114,7 +126,6 @@ function plot_scen_tree_x_i(scen_tree :: ScenarioTree, x :: Vector{Float64}, i :
         parent = parents[1]
         parents = parents[2:end]
         children = scen_tree.child_mapping[parent]
-        println(parent, children)
         for child in children
             append!(xs, [node_to_timestep(scen_tree, child)])
 
@@ -129,7 +140,6 @@ function plot_scen_tree_x_i(scen_tree :: ScenarioTree, x :: Vector{Float64}, i :
         end
     end
     
-    println(xs, ys)
     scatter(xs, ys, fmt=:png, xlim = (0.6, length(scen_tree.min_index_per_timestep) + 2.2), ylim = (-1.1, 1.1), marker = (10, 0.2, :orange), series_annotations = text.(1:7), label="")
     annotate!(collect(zip(xs .+ 0.1, ys, map(data -> (data[i], 16, :left), collect(eachrow(reshape(x, scen_tree.n_x, 7)'))))))
     filename = string(filename, ".png")
