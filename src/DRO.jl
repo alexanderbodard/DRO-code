@@ -14,6 +14,7 @@ module DRO
     include("custom_model.jl")
     include("dynamics_in_l_vanilla_model.jl")
     include("dynamics_in_l_supermann_model.jl")
+    include("ricatti_vanilla_model.jl")
     include("mosek_model.jl")
     
     import MathOptInterface as MOI
