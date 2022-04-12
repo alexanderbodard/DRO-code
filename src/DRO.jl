@@ -3,21 +3,23 @@ module DRO
     ###
     # Problem definition
     ###
-    include("cost.jl")
-    include("dynamics.jl")
-    include("risk_constraints.jl")
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
+
     include("scenario_tree.jl")
+    include("risk_constraints.jl")
+    include("dynamics.jl")
+    include("cost.jl")
 
     include("model.jl")
     include("custom_model.jl")
-
-    include("dynamics_in_l_model.jl")
+    include("dynamics_in_l_vanilla_model.jl")
+    include("dynamics_in_l_supermann_model.jl")
     include("mosek_model.jl")
-
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
+    
     import MathOptInterface as MOI
     import MathOptSetDistances as MOD
     import LinearAlgebra as LA
+
     Random.seed!(1234)
 
     ##########################
@@ -70,7 +72,8 @@ module DRO
     ###
 
     reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
-    model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
+    vanilla_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
+    supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
 
     ###
     # Solve the optimization problem
@@ -81,13 +84,11 @@ module DRO
     # println("x_ref: ", x_ref)
     # println("u_ref", u_ref)
 
-    @time solve_model(model, [2., 2.])
-    @time solve_model(model, [2., 2.])
+    @time solve_model(vanilla_model, [2., 2.])
+    @time solve_model(vanilla_model, [2., 2.])
+    @time solve_model(supermann_model, [2., 2.])
+    @time solve_model(supermann_model, [2., 2.])
     # x, u = solve_model(model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)
-
-    # plot_scen_tree_x(scen_tree, x, "x")
-    # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")
-    # plot_scen_tree_x_i(scen_tree, x, 2, "x_2")
 end
