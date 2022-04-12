@@ -1,15 +1,16 @@
-include("../src/cost.jl")
-include("../src/dynamics.jl")
-include("../src/risk_constraints.jl")
+using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots
+
 include("../src/scenario_tree.jl")
+include("../src/dynamics.jl")
+include("../src/cost.jl")
+include("../src/risk_constraints.jl")
 
 include("../src/model.jl")
 include("../src/custom_model.jl")
 
-include("../src/dynamics_in_l_model.jl")
+include("../src/dynamics_in_l_vanilla_model.jl")
 include("../src/mosek_model.jl")
 
-using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots
 import MathOptInterface as MOI
 import MathOptSetDistances as MOD
 import LinearAlgebra as LA

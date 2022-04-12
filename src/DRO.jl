@@ -3,21 +3,22 @@ module DRO
     ###
     # Problem definition
     ###
-    include("cost.jl")
-    include("dynamics.jl")
-    include("risk_constraints.jl")
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
+
     include("scenario_tree.jl")
+    include("risk_constraints.jl")
+    include("dynamics.jl")
+    include("cost.jl")
 
     include("model.jl")
     include("custom_model.jl")
-
-    include("dynamics_in_l_model.jl")
+    include("dynamics_in_l_vanilla_model.jl")
     include("mosek_model.jl")
-
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
+    
     import MathOptInterface as MOI
     import MathOptSetDistances as MOD
     import LinearAlgebra as LA
+
     Random.seed!(1234)
 
     ##########################
@@ -29,7 +30,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 2; d = 2; nx = 2; nu = 1
+    N = 3; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
@@ -88,8 +89,4 @@ module DRO
     # x, u = solve_model(model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)
-
-    # plot_scen_tree_x(scen_tree, x, "x")
-    # plot_scen_tree_x_i(scen_tree, x, 1, "x_1")
-    # plot_scen_tree_x_i(scen_tree, x, 2, "x_2")
 end

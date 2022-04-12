@@ -20,11 +20,15 @@ abstract type CUSTOM_SOLVER_MODEL end
 const MOSEK_MODEL = Model
 
 """
+Type union for all available models
+"""
+const SOLVER_MODEL = Union{MOSEK_MODEL, CUSTOM_SOLVER_MODEL}
+
+"""
 Model in which the problem dynamics Hx = 0 are imposed by including H in the L matrix.
 """
-struct DYNAMICS_IN_L_MODEL{T} <: CUSTOM_SOLVER_MODEL
+struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
     L :: T
-    # prox_hstar_Sigmainv :: U
     L_norm :: Float64
     nz :: Int64
     nv :: Int64
@@ -43,9 +47,11 @@ struct DYNAMICS_IN_L_MODEL{T} <: CUSTOM_SOLVER_MODEL
 end
 
 """
-Type union for all available models
+TODO
 """
-const SOLVER_MODEL = Union{MOSEK_MODEL, CUSTOM_SOLVER_MODEL}
+struct DYNAMICS_IN_L_SUPERMANN_MODEL{T} <: CUSTOM_SOLVER_MODEL
+    L :: T
+end
 
 """
 Model in which the problem dynamics are imposed through a Ricatti equation
@@ -66,7 +72,7 @@ function build_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynami
         return build_mosek_model(scen_tree, cost, dynamics, rms)
     end
     if solver == DYNAMICS_IN_L_SOLVER
-        return build_dynamics_in_l_model(scen_tree, cost, dynamics, rms)     
+        return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms)     
     end
     error("Building a solver of type $(solver) is not supported.")
 end

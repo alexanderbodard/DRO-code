@@ -1,206 +1,6 @@
-function get_n_z(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
-    if eliminate_states
-        n_x = 0                             # Eliminate state variables
-    else
-        n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
-    end
-
-    return ((length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u # One input per time step
-                + n_x                                               # n_x
-                + scen_tree.n                                       # s variable: 1 component per node
-                + scen_tree.n_non_leaf_nodes * length(rms[1].b))    # One y variable for each non leaf node
-end
-
-function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
-    n_y = length(rms[1].b)
-    if eliminate_states
-        n_x = 0                             # Eliminate state variables
-    else
-        n_x = scen_tree.n * scen_tree.n_x   # Every node has a state
-    end
-
-    n_timesteps = length(scen_tree.min_index_per_timestep)
-
-    n_L_rows = (size(rms[1].A)[2]    # 4a
-                + n_y                # 4b
-                + 1 + n_y)           # 4c
-    n_cost_i = (scen_tree.n_x * n_timesteps    # x
-        + (n_timesteps - 1) * scen_tree.n_u    # u
-        + 1)                                   # x_{T-1}[i]
-    n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
-    n_dynamics = (scen_tree.n - 1) * scen_tree.n_x
-    return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost + n_dynamics + scen_tree.n_x # Initial condition!
-end
-
-"""
-Currently doesn't support elimination of states
-"""
-function construct_L_4a(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, n_z :: Int64, n_y :: Int64)
-    L_I = Float64[]
-    L_J = Float64[]
-    L_V = Float64[]
-
-    n_y_start_index = ((length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u  # Inputs
-                        + scen_tree.n_x * scen_tree.n              # State at t=0
-                        + scen_tree.n                              # S variables
-                        + 1)
-
-    ss = z_to_s(scen_tree)
-    yy = z_to_y(scen_tree, n_y)
-    for k = 1:scen_tree.n_non_leaf_nodes
-        Is = Float64[]
-        Js = Float64[]
-        Vs = Float64[]
-
-        Js = ss[scen_tree.child_mapping[k]]
-        append!(Is, [i for i in collect(1:length(Js))])
-        append!(Vs, [1 for _ in 1:length(Js)])
-        S_s = sparse(Is, Js, Vs, length(Is), n_y_start_index - 1)
-
-        Is = Float64[]
-        Js = Float64[]
-        Vs = Float64[]
-
-        Js = yy[(k - 1) * n_y + 1 : k * n_y] .- (n_y_start_index - 1)
-        append!(Is, [i for i in collect(1:length(Js))])
-        append!(Vs, [1 for _ in 1:length(Js)])
-        S_y = sparse(Is, Js, Vs, length(Is), n_z - n_y_start_index + 1)
-
-        r = rms[k]
-        S = hcat(sparse(r.A') * S_s, sparse(r.B') * S_y)
-        SI, SJ, SV = findnz(S)
-        if k > 1
-            append!(L_I, SI .+ maximum(L_I))
-        else
-            append!(L_I, SI)
-        end
-        append!(L_J, SJ)
-        append!(L_V, SV)
-    end
-
-    return L_I, L_J, L_V
-end
-
-"""
-Currently doesn't support elimination of states
-"""
-function construct_L_4b(scen_tree :: ScenarioTree, n_y :: Int64)
-    L_II = Float64[]
-    L_JJ = Float64[]
-    L_VV = Float64[]
-
-    yy = z_to_y(scen_tree, n_y)
-    for k = 1:scen_tree.n_non_leaf_nodes
-        ind = (k - 1) * n_y + 1 : k * n_y
-        append!(L_JJ, yy[ind])
-    end
-    append!(L_II, [i for i in collect(1 : scen_tree.n_non_leaf_nodes * n_y)])
-    append!(L_VV, [1 for _ in 1:scen_tree.n_non_leaf_nodes * n_y])
-    
-    return L_II, L_JJ, L_VV
-end
-
-"""
-Currently doesn't support elimination of states
-"""
-function construct_L_4c(scen_tree :: ScenarioTree, n_y :: Int64)
-    L_III = Float64[]
-    L_JJJ = Float64[]
-    L_VVV = Float64[]
-
-    yy = z_to_y(scen_tree, n_y)
-    ss = z_to_s(scen_tree)
-    for k = 1:scen_tree.n_non_leaf_nodes
-        append!(L_JJJ, ss[k])
-        ind = collect(
-        (k - 1) * n_y + 1 : k * n_y
-        )
-        append!(L_JJJ, yy[ind])
-    end
-    append!(L_III, [i for i in collect(1 : scen_tree.n_non_leaf_nodes * (n_y + 1))])
-    append!(L_VVV, [-1 for _ in 1:scen_tree.n_non_leaf_nodes * (n_y + 1)])
-
-    return L_III, L_JJJ, L_VVV
-end
-
-"""
-Currently doesn't support elimination of states
-"""
-function construct_L_4d(scen_tree :: ScenarioTree)
-    L_I = Float64[]
-    L_J = Float64[]
-    L_V = Float64[]
-
-    xx = z_to_x(scen_tree)
-    uu = z_to_u(scen_tree)
-    ss = z_to_s(scen_tree)
-    for k = scen_tree.leaf_node_min_index : scen_tree.leaf_node_max_index
-        xxs = xx[node_to_x(scen_tree, k)]
-        uus = []
-        sss = [ss[k]]
-
-        n = k
-        for _ = length(scen_tree.min_index_per_timestep)-1:-1:1
-            n = scen_tree.anc_mapping[n]
-            pushfirst!(xxs, xx[node_to_x(scen_tree, n)]...)
-            pushfirst!(uus, uu[node_to_timestep(scen_tree, n)]...)
-        end
-        append!(L_J, xxs)
-        append!(L_J, uus)
-        append!(L_J, sss)
-    end
-    append!(L_I, [i for i in 1 : length(L_J)])
-    append!(L_V, [1 for _ in 1 : length(L_J)])
-
-    return L_I, L_J, L_V
-end
-
-"""
-Impose dynamics H * z = 0 directly. H is included in the L matrix
-"""
-function construct_L_4e(scen_tree :: ScenarioTree, dynamics :: Dynamics, n_z :: Int64)
-    L_I = Float64[]
-    L_J = Float64[]
-    L_V = Float64[]
-
-    u_offset = scen_tree.n * scen_tree.n_x
-    I_offset = 0
-    # J_offset = 0
-    B_J_offset = 0
-    for k = 2 : scen_tree.n
-        # For every non-root state, impose dynamics
-        w = scen_tree.node_info[k].w
-        A = dynamics.A[w]; B = dynamics.B[w]
-        I = LA.I(size(A)[1])
-        anc_node = scen_tree.anc_mapping[k]
-
-        # x+ = A x + B u
-
-        # A
-        AI, AJ, AV = findnz(A)
-        append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ (scen_tree.n_x * (anc_node - 1)))
-        append!(L_V, AV)
-
-        # -I
-        AI, AJ, AV = findnz(-I)
-        append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ (scen_tree.n_x) * (k - 1))
-        append!(L_V, AV)
-
-        # B
-        AI, AJ, AV = findnz(B)
-        append!(L_I, AI .+ I_offset)
-        append!(L_J, AJ .+ (scen_tree.n_u * (node_to_timestep(scen_tree, anc_node) - 1)) .+ u_offset)
-        append!(L_V, AV)
-
-        I_offset += size(A)[1]
-        # J_offset += size(A)[2] # TODO: A is always square, so can be done with a single offset?
-        # B_J_offset += size(B)[2]
-    end
-
-    return L_I, L_J, L_V
-end
+############################################################
+# Build stage
+############################################################
 
 """
 Currently doesn't support elimination of states
@@ -235,55 +35,152 @@ function construct_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, dyna
     return sparse(L_I, L_J, L_V, n_L, n_z)
 end
 
-"""
-Performs a bisection method.
+function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynamics, rms :: Vector{Riskmeasure})
+    eliminate_states = false
+    n_z = get_n_z(scen_tree, rms, eliminate_states)
+    z = zeros(n_z)
 
-Func must be callable.
-g_lb and g_ub will be altered by calling this function.
-"""
-function bisection_method!(g_lb, g_ub, tol, Q, z_temp, s, workspace_vec)
-    # while psi(g_lb)*psi(g_ub) > 0
-    #     g_ub *= 2
-    # end
+    n_L = get_n_L(scen_tree, rms, eliminate_states)
+    L = construct_L(scen_tree, rms, dynamics, n_L, n_z)
+    L_trans = L'
 
-    if ( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ) > 0 # only work up to a precision of the tolerance
-        error("Incorrect initial interval. Found $(psi(Q, g_lb, z_temp, s, workspace_vec)) and $(psi(Q, g_ub, z_temp, s, workspace_vec)) which results in $(( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ))")
+    L_norm = maximum(LA.svdvals(collect(L)))^2
+
+    # 4a
+    inds_4a = Union{UnitRange{Int64}, Int64}[]
+    offset = 0
+    for k = 1:scen_tree.n_non_leaf_nodes
+        n_z_part = size(rms[k].A)[2]
+        ind = offset + 1 : offset + n_z_part
+        append!(inds_4a, [ind])
+        offset += n_z_part
     end
 
-    while abs(g_ub-g_lb) > tol
-        g_new = (g_lb + g_ub) / 2.
-        if psi(Q, g_lb, z_temp, s, workspace_vec) * psi(Q, g_new, z_temp, s, workspace_vec) < 0
-            g_ub = g_new
-        else
-            g_lb = g_new
+    # 4b
+    inds_4b_start = offset + 1
+    for k = 1:scen_tree.n_non_leaf_nodes
+        n_z_part = length(rms[k].b)
+        offset += n_z_part
+    end
+    inds_4b_end = offset
+    inds_4b = inds_4b_start : inds_4b_end
+
+    # 4c
+    inds_4c = Union{UnitRange{Int64}, Int64}[]
+    b_bars = Vector{Float64}[]
+    for k = 1:scen_tree.n_non_leaf_nodes
+        n_z_part = length(rms[k].b) + 1
+        ind = offset + 1 : offset + n_z_part
+        b_bar = [1; rms[k].b]
+        append!(inds_4c, [ind])
+        append!(b_bars, [b_bar])
+
+        offset += n_z_part
+    end
+
+    # 4d: Cost epigraph projection
+    # TODO: Extract into separate scenario tree method
+    scenarios = []
+    for k = scen_tree.leaf_node_min_index:scen_tree.leaf_node_max_index
+        nn = k
+        scenario = [nn]
+        while nn != 1
+            nn = scen_tree.anc_mapping[nn]
+            append!(scenario, nn)
         end
+        append!(scenarios, [reverse(scenario)])
     end
-    return (g_lb + g_ub) / 2.
+    ####
+    R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
+    T = length(scen_tree.min_index_per_timestep)
+    Q_bars = []
+    Q_bars_old = []
+    # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
+    for scen_ind = 1:length(scenarios)
+        scenario = scenarios[scen_ind]
+
+        L_I = Float64[]
+        L_J = Float64[]
+        L_V = Float64[]
+
+        # TODO: This computation can be simplified a LOT
+        for t = 1:T
+            nn = scenario[t]
+            # Add Q to Q_bar
+            Q_I, Q_J, Q_V = findnz(sparse(cost.Q[t]))
+
+            append!(L_I, Q_I .+ (t - 1) * scen_tree.n_x)
+            append!(L_J, Q_J .+ (t - 1) * scen_tree.n_x)
+            append!(L_V, 2 .* Q_V)
+
+            if t < T
+                # Add R to Q_bar
+                R_I, R_J, R_V = findnz(sparse(cost.R[t]))
+
+                append!(L_I, R_I .+ R_offset .+ (t - 1) * scen_tree.n_u)
+                append!(L_J, R_J .+ R_offset .+ (t - 1) * scen_tree.n_u)
+                append!(L_V, 2 .* R_V)
+            end
+        end
+
+        append!(Q_bars_old, [sparse(L_I, L_J, L_V, 
+            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u, 
+            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
+        )])
+    end
+    for i = 1:length(Q_bars_old)
+        append!(Q_bars, [[Q_bars_old[i][j, j] for j = 1:size(Q_bars_old[i])[1]]])
+    end
+
+    # Compute projection
+    inds_4d = Union{UnitRange{Int64}, Int64}[]
+    for scen_ind  = 1:length(scenarios)
+        n_z_part = length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
+        ind = offset + 1 : offset + n_z_part
+        append!(inds_4d, [ind])
+
+        offset += (n_z_part + 1)
+    end
+
+    # 4e: Dynamics
+    n_z_part = scen_tree.n_x * (scen_tree.n - 1)
+    inds_4e = offset + 1 : offset + n_z_part
+
+    # # Initial condition
+    # z[end] = 2.
+
+    return DYNAMICS_IN_L_VANILLA_MODEL(
+        L,
+        L_norm,
+        n_z,
+        n_L,
+        z_to_x(scen_tree),
+        z_to_u(scen_tree),
+        z_to_s(scen_tree),
+        z_to_y(scen_tree, 4),
+        inds_4a,
+        inds_4b,
+        inds_4c,
+        b_bars,
+        inds_4d,
+        Q_bars,
+        inds_4e,
+        zeros(
+            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + 
+            (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
+        )
+    )
 end
 
-function epigraph_qcqp(Q, x, t)
-    model = Model(Mosek.Optimizer)
-    set_silent(model)
+############################################################
+# Solve stage
+############################################################
 
-    @variable(model, p[i=1:length(x)])
-    @variable(model, s)
-    # @variable(model, tt >= 0)
-
-    # @objective(model, Min, sum((p[i] - x[i])^2 for i = 1:length(x)) + sum((s - t)^2))
-    # @objective(model, Min, [tt; vcat(p, s) - vcat(x, t)] in SecondOrderCone())
-    @objective(model, Min, (p[1] - x[1])^2 + (p[2] - x[2])^2 + (s - t)^2)
-
-    @constraint(model, 0.5 * p' * Q * p - s <= 0)
-
-    optimize!(model)
-    return value.(model[:p]), value.(model[:s])
-end
-
-function L_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, transp :: Bool = false)
+function L_mult(model :: DYNAMICS_IN_L_VANILLA_MODEL, z :: Vector{Float64}, transp :: Bool = false)
     transp ? model.L' * z : model.L * z
 end
 
-function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, gamma :: Float64)
+function Gamma_grad_mult(model :: DYNAMICS_IN_L_VANILLA_MODEL, z :: Vector{Float64}, gamma :: Float64)
     temp = zeros(length(z));
     temp[model.s_inds[1]] = 1;
     return gamma .* temp
@@ -309,7 +206,7 @@ function psi(Q, gamma, z_temp, s, workspace_vec)
     return res
 end
 
-function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64})
+function projection(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64})
     # 4a
     for ind in model.inds_4a
         z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
@@ -362,71 +259,9 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
     return z
 end
 
-function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64}, gamma :: Float64)
+function prox_hstar(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64}, gamma :: Float64)
     return z - projection(model, x0, z / gamma) * gamma
 end
-
-# """
-# Closely follows SuperMann paper Algorithm 3
-
-# - k is the number of elements in S and Stilde when calling this function
-
-# """
-# function restarted_broyden!(
-#     S :: Vector{Float64}, 
-#     Stilde :: Vector{Float64}, 
-#     s :: Vector{Float64},
-#     s_tilde :: Vector{Float64},
-#     y :: Vector{Float64}, 
-#     rx :: Vector{Float64},
-#     d :: Vector{Float64},
-#     k :: Int64; 
-#     MAX_K :: Int64 = 20,
-#     theta_bar :: Float64 = 0.5
-# )
-#     nrx = length(rx)
-
-#     # Initialize d and s_tilde
-#     copyto!(d, -rx)
-#     copyto!(s_tilde, y)
-
-#     # Loop over the given sets S and Stilde
-#     if k >= 1
-#         for i = 1:k
-#             inds = (i - 1) * nrx + 1 : i * nrx
-#             s_tilde += LA.dot(S[inds], s_tilde) * Stilde[inds]
-#             d += LA.dot(S[inds], d) * Stilde[inds]
-#         end
-#     end
-
-#     # Compute theta
-#     gamma = LA.dot(s_tilde, s) / LA.norm(s)^2
-#     if abs(gamma) >= theta_bar
-#         theta = 1
-#     elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
-#         theta = (1 - theta_bar)
-#     else
-#         theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
-#     end
-
-#     # Compute final s_tilde and d
-#     s_tilde = theta / (1 - theta + theta * gamma) / LA.norm(s)^2 * (s - s_tilde)
-#     d += LA.dot(s, d) * s_tilde
-
-#     # Update sets S and S_tilde and counter k
-#     if k === MAX_K
-#         k = 0
-#         # Clear sets
-#         # Well, let's not actually do this but just reset the index
-#     else
-#         k += 1
-#         # Update sets
-#         S[(k - 1) * nrx + 1 : k * nrx] = s
-#         Stilde[(k - 1) * nrx + 1 : k * nrx] = s_tilde
-#     end
-
-#     return d
-# end
 
 function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
     return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
@@ -501,7 +336,7 @@ end
 function primal_dual_alg(
     x, 
     v, 
-    model :: DYNAMICS_IN_L_MODEL, 
+    model :: DYNAMICS_IN_L_VANILLA_MODEL, 
     x0 :: Vector{Float64}; 
     DEBUG :: Bool = false, 
     tol :: Float64 = 1e-12, 
@@ -517,9 +352,6 @@ function primal_dual_alg(
     n_z = length(x)
     n_L = length(v)
 
-    # TODO: Initialize Sigma and Gamma in some way
-    # Currently they are defined as c * LA.I, so that the bisection
-    # method can be used to retrieve c
     """
     - Sigma in S_{++}^{n_L}
     - Gamma in S_{++}^{n_z}
@@ -527,8 +359,8 @@ function primal_dual_alg(
     Choose sigma and gamma such that
     sigma * gamma * model.L_norm < 1
     """
-    lambda = 0.9
-    sigma = sqrt(0.9 / model.L_norm)
+    lambda = 0.5
+    sigma = sqrt(0.99 / model.L_norm)
     sigma_inv = 1 / sigma
     gamma = sigma
 
@@ -820,144 +652,7 @@ end
 # Refactor
 ##########
 
-function build_dynamics_in_l_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynamics, rms :: Vector{Riskmeasure})
-    eliminate_states = false
-    n_z = get_n_z(scen_tree, rms, eliminate_states)
-    z = zeros(n_z)
-
-    n_L = get_n_L(scen_tree, rms, eliminate_states)
-    L = construct_L(scen_tree, rms, dynamics, n_L, n_z)
-    L_trans = L'
-
-    L_norm = maximum(LA.svdvals(collect(L)))^2
-
-    # 4a
-    inds_4a = Union{UnitRange{Int64}, Int64}[]
-    offset = 0
-    for k = 1:scen_tree.n_non_leaf_nodes
-        n_z_part = size(rms[k].A)[2]
-        ind = offset + 1 : offset + n_z_part
-        append!(inds_4a, [ind])
-        offset += n_z_part
-    end
-
-    # 4b
-    inds_4b_start = offset + 1
-    for k = 1:scen_tree.n_non_leaf_nodes
-        n_z_part = length(rms[k].b)
-        offset += n_z_part
-    end
-    inds_4b_end = offset
-    inds_4b = inds_4b_start : inds_4b_end
-
-    # 4c
-    inds_4c = Union{UnitRange{Int64}, Int64}[]
-    b_bars = Vector{Float64}[]
-    for k = 1:scen_tree.n_non_leaf_nodes
-        n_z_part = length(rms[k].b) + 1
-        ind = offset + 1 : offset + n_z_part
-        b_bar = [1; rms[k].b]
-        append!(inds_4c, [ind])
-        append!(b_bars, [b_bar])
-
-        offset += n_z_part
-    end
-
-    # 4d: Cost epigraph projection
-    # TODO: Extract into separate scenario tree method
-    scenarios = []
-    for k = scen_tree.leaf_node_min_index:scen_tree.leaf_node_max_index
-        nn = k
-        scenario = [nn]
-        while nn != 1
-            nn = scen_tree.anc_mapping[nn]
-            append!(scenario, nn)
-        end
-        append!(scenarios, [reverse(scenario)])
-    end
-    ####
-    R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
-    T = length(scen_tree.min_index_per_timestep)
-    Q_bars = []
-    Q_bars_old = []
-    # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
-    for scen_ind = 1:length(scenarios)
-        scenario = scenarios[scen_ind]
-
-        L_I = Float64[]
-        L_J = Float64[]
-        L_V = Float64[]
-
-        # TODO: This computation can be simplified a LOT
-        for t = 1:T
-            nn = scenario[t]
-            # Add Q to Q_bar
-            Q_I, Q_J, Q_V = findnz(sparse(cost.Q[t]))
-
-            append!(L_I, Q_I .+ (t - 1) * scen_tree.n_x)
-            append!(L_J, Q_J .+ (t - 1) * scen_tree.n_x)
-            append!(L_V, 2 .* Q_V)
-
-            if t < T
-                # Add R to Q_bar
-                R_I, R_J, R_V = findnz(sparse(cost.R[t]))
-
-                append!(L_I, R_I .+ R_offset .+ (t - 1) * scen_tree.n_u)
-                append!(L_J, R_J .+ R_offset .+ (t - 1) * scen_tree.n_u)
-                append!(L_V, 2 .* R_V)
-            end
-        end
-
-        append!(Q_bars_old, [sparse(L_I, L_J, L_V, 
-            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u, 
-            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
-        )])
-    end
-    for i = 1:length(Q_bars_old)
-        append!(Q_bars, [[Q_bars_old[i][j, j] for j = 1:size(Q_bars_old[i])[1]]])
-    end
-
-    # Compute projection
-    inds_4d = Union{UnitRange{Int64}, Int64}[]
-    for scen_ind  = 1:length(scenarios)
-        n_z_part = length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
-        ind = offset + 1 : offset + n_z_part
-        append!(inds_4d, [ind])
-
-        offset += (n_z_part + 1)
-    end
-
-    # 4e: Dynamics
-    n_z_part = scen_tree.n_x * (scen_tree.n - 1)
-    inds_4e = offset + 1 : offset + n_z_part
-
-    # # Initial condition
-    # z[end] = 2.
-
-    return DYNAMICS_IN_L_MODEL(
-        L,
-        L_norm,
-        n_z,
-        n_L,
-        z_to_x(scen_tree),
-        z_to_u(scen_tree),
-        z_to_s(scen_tree),
-        z_to_y(scen_tree, 4),
-        inds_4a,
-        inds_4b,
-        inds_4c,
-        b_bars,
-        inds_4d,
-        Q_bars,
-        inds_4e,
-        zeros(
-            length(scen_tree.min_index_per_timestep) * scen_tree.n_x + 
-            (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
-        )
-    )
-end
-
-function solve_model(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing, SUPERMANN :: Bool = true)
+function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing, SUPERMANN :: Bool = true)
     z = zeros(model.nz)
     v = zeros(model.nv)
 
