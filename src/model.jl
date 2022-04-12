@@ -78,9 +78,35 @@ const DYNAMICS_IN_L_MODEL = Union{DYNAMICS_IN_L_VANILLA_MODEL, DYNAMICS_IN_L_SUP
 """
 Model in which the problem dynamics are imposed through a Ricatti equation
 """
-struct RICATTI_MODEL <: CUSTOM_SOLVER_MODEL
+struct RICATTI_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
+    L :: T
+    L_norm :: Float64
+    nz :: Int64
+    nv :: Int64
+    x_inds :: Vector{Int64}
+    u_inds :: Vector{Int64}
+    s_inds :: Vector{Int64}
+    y_inds :: Vector{Int64}
+    inds_4a :: Vector{Union{UnitRange{Int64}, Int64}}
+    inds_4b :: UnitRange{Int64}
+    inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
+    b_bars :: Vector{Vector{Float64}}
+    inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
+    Q_bars :: Vector{Any}
+    inds_4e :: UnitRange{Int64}
+    workspace_vec :: Vector{Float64}
+    x_workspace :: Vector{Float64}
+    v_workspace :: Vector{Float64}
+end
+
+"""
+Model in which the problem dynamics are imposed through a Ricatti equation
+"""
+struct RICATTI_SUPERMANN_MODEL <: CUSTOM_SOLVER_MODEL
     L :: Any
 end
+
+const RICATTI_MODEL = Union{RICATTI_VANILLA_MODEL, RICATTI_SUPERMANN_MODEL}
 
 """
 Model in which the state variables are eliminated
@@ -103,6 +129,9 @@ function build_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynami
         else
             return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms)
         end     
+    end
+    if solver == RICATTI_SOLVER
+        return build_ricatti_vanilla_model(scen_tree, cost, dynamics, rms)
     end
     error("Building a solver of type $(solver) is not supported.")
 end

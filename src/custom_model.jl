@@ -15,7 +15,7 @@ function get_n_z(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminat
                 + scen_tree.n_non_leaf_nodes * length(rms[1].b))    # One y variable for each non leaf node
 end
 
-function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool)
+function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminate_states :: Bool; RICATTI :: Bool = false)
     n_y = length(rms[1].b)
     if eliminate_states
         n_x = 0                             # Eliminate state variables
@@ -32,7 +32,11 @@ function get_n_L(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, eliminat
         + (n_timesteps - 1) * scen_tree.n_u    # u
         + 1)                                   # x_{T-1}[i]
     n_cost = n_cost_i * (scen_tree.n - scen_tree.n_non_leaf_nodes)
-    n_dynamics = (scen_tree.n - 1) * scen_tree.n_x
+    if !RICATTI
+        n_dynamics = (scen_tree.n - 1) * scen_tree.n_x
+    else
+        n_dynamics = scen_tree.n * scen_tree.n_x + (n_timesteps - 1)
+    end
     return scen_tree.n_non_leaf_nodes * n_L_rows + n_cost + n_dynamics + scen_tree.n_x # Initial condition!
 end
 
@@ -236,6 +240,36 @@ function construct_L_with_dynamics(scen_tree :: ScenarioTree, rms :: Vector{Risk
     append!(L_J, collect(1:scen_tree.n_x))
     append!(L_V, ones(scen_tree.n_x))
 
+    return sparse(L_I, L_J, L_V, n_L, n_z)
+end
+
+"""
+Currently doesn't support elimination of states
+"""
+function construct_L_ricatti(scen_tree :: ScenarioTree, rms :: Vector{Riskmeasure}, dynamics :: Dynamics, n_L :: Int64, n_z :: Int64)
+    n_y = length(rms[1].b)
+
+    L_I, L_J, L_V = construct_L_4a(scen_tree, rms, n_z, n_y)
+    L_II, L_JJ, L_VV = construct_L_4b(scen_tree, n_y)
+    L_III, L_JJJ, L_VVV = construct_L_4c(scen_tree, n_y)
+    L_IIII, L_JJJJ, L_VVVV = construct_L_4d(scen_tree)
+
+    append!(L_I, L_II .+ maximum(L_I))
+    append!(L_I, L_III .+ maximum(L_I))
+    append!(L_I, L_IIII .+ maximum(L_I))
+    append!(L_J, L_JJ, L_JJJ, L_JJJJ)
+    append!(L_V, L_VV, L_VVV, L_VVVV)
+
+    L_II, L_JJ, L_VV = findnz(sparse(LA.I(scen_tree.n * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1))))
+    append!(L_I, L_II .+ maximum(L_I))
+    append!(L_J, L_JJ)
+    append!(L_V, L_VV)
+
+    # Initial condition
+    append!(L_I, maximum(L_I) .+ collect(1:scen_tree.n_x))
+    append!(L_J, collect(1:scen_tree.n_x))
+    append!(L_V, ones(scen_tree.n_x))
+    
     return sparse(L_I, L_J, L_V, n_L, n_z)
 end
 
