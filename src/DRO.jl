@@ -3,7 +3,7 @@ module DRO
     ###
     # Problem definition
     ###
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles
 
     include("scenario_tree.jl")
     include("risk_constraints.jl")
@@ -80,15 +80,16 @@ module DRO
     # Solve the optimization problem
     ###
 
-    @time solve_model(reference_model, [2., 2.])
-    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
+    # @time solve_model(reference_model, [2., 2.])
+    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
     # println("x_ref: ", x_ref)
     # println("u_ref", u_ref)
+    writedlm("output/log_xref.dat", x_ref, ',')
 
     @time solve_model(vanilla_model, [2., 2.])
-    @time solve_model(vanilla_model, [2., 2.])
+    @time solve_model(vanilla_model, [2., 2.], verbose=true)
     @time solve_model(supermann_model, [2., 2.])
-    @time solve_model(supermann_model, [2., 2.])
+    @time solve_model(supermann_model, [2., 2.], verbose=true)
     # x, u = solve_model(model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)

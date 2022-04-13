@@ -216,7 +216,7 @@ function primal_dual_alg(
     c0 :: Float64 = 0.99,
     c1 :: Float64 = 0.99,
     q :: Float64 = 0.99,
-    LOW_MEMORY :: Bool = true
+    LOW_MEMORY :: Bool = false
 )
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 0.5
@@ -245,7 +245,20 @@ function primal_dual_alg(
 
     xold = ones(length(x) + length(v))
     xresold = ones(length(x) + length(v))
-    # H = LA.I(length(x) + length(v))
+    if !LOW_MEMORY
+        H = LA.I(length(x) + length(v))
+    end
+
+    if DEBUG
+        n_z = length(x)
+        log_x = zeros(MAX_ITER_COUNT, n_z)
+        nx = length(model.x_inds)
+        nu = length(model.u_inds)
+        ns = length(model.s_inds)
+        ny = length(model.y_inds)
+        xinit = copy(x[1:nx])
+        log_residuals = zeros(MAX_ITER_COUNT)
+    end
 
 
     # TODO: Work with some tolerance
@@ -335,8 +348,8 @@ function primal_dual_alg(
         end
 
         if DEBUG
-            plot_vector[counter + 1, 1:end] = x
-            residuals[counter + 1] = r_norm
+            log_x[counter + 1, 1:end] = x
+            log_residuals[counter + 1] = r_norm
         end
 
         if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol
@@ -344,6 +357,11 @@ function primal_dual_alg(
             break
         end
         counter += 1
+    end
+
+    if DEBUG
+        writedlm("output/log_supermann_x.dat", log_x[1:counter, 1:end], ',')
+        writedlm("output/log_supermann_residual.dat", log_residuals[1:counter], ',') 
     end
 
     return x

@@ -159,15 +159,26 @@ function primal_dual_alg(
     sigma = sqrt(0.99 / model.L_norm)
     gamma = sigma
 
+    # if DEBUG
+    #     n_z = length(x)
+    #     plot_vector = zeros(MAX_ITER_COUNT, n_z)
+    #     nx = length(model.x_inds)
+    #     nu = length(model.u_inds)
+    #     ns = length(model.s_inds)
+    #     ny = length(model.y_inds)
+    #     xinit = copy(x[1:nx])
+    #     residuals = zeros(MAX_ITER_COUNT)
+    # end
+
     if DEBUG
         n_z = length(x)
-        plot_vector = zeros(MAX_ITER_COUNT, n_z)
+        log_x = zeros(MAX_ITER_COUNT, n_z)
         nx = length(model.x_inds)
         nu = length(model.u_inds)
         ns = length(model.s_inds)
         ny = length(model.y_inds)
         xinit = copy(x[1:nx])
-        residuals = zeros(MAX_ITER_COUNT)
+        log_residuals = zeros(MAX_ITER_COUNT)
     end
 
     # TODO: Work with some tolerance
@@ -203,9 +214,14 @@ function primal_dual_alg(
         end
 
         if DEBUG
-            plot_vector[counter + 1, 1:end] = x
-            residuals[counter + 1] = r_norm
+            log_x[counter + 1, 1:end] = x
+            log_residuals[counter + 1] = r_norm
         end
+
+        # if DEBUG
+        #     plot_vector[counter + 1, 1:end] = x
+        #     residuals[counter + 1] = r_norm
+        # end
 
         if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol
             println("Breaking!", counter)
@@ -214,32 +230,37 @@ function primal_dual_alg(
         counter += 1
     end
 
-    if DEBUG        
-        residues = Float64[]
-        for i = 1:counter
-            append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
-        end
-        plot(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["Vanilla"])
+    # if DEBUG        
+    #     residues = Float64[]
+    #     for i = 1:counter
+    #         append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
+    #     end
+    #     plot(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["Vanilla"])
+    # end
+
+    if DEBUG
+        writedlm("output/log_vanilla_x.dat", log_x[1:counter, 1:end], ',')
+        writedlm("output/log_vanilla_residual.dat", log_residuals[1:counter], ',') 
     end
 
     if DEBUG
-        residues = Float64[]
-        for i = 1:counter
-            append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
-        end
-        fixed_point_residues = Float64[]
-        for i = 2:counter
-            append!(fixed_point_residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- plot_vector[i-1, 1:length(model.x_inds)]) / LA.norm(plot_vector[i, 1:length(model.x_inds)]))
-        end
+        # residues = Float64[]
+        # for i = 1:counter
+        #     append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
+        # end
+        # fixed_point_residues = Float64[]
+        # for i = 2:counter
+        #     append!(fixed_point_residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- plot_vector[i-1, 1:length(model.x_inds)]) / LA.norm(plot_vector[i, 1:length(model.x_inds)]))
+        # end
 
-        pgfplotsx()
+        # pgfplotsx()
         # plot(collect(1:length(fixed_point_residues)), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * length(fixed_point_residues)), labels=["fixed_point_residue_x"])
         # filename = "fixed_point_residue_x.png"
         # savefig(filename)
 
-        plot!(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["SuperMann"])
-        filename = "debug_x_res.png"
-        savefig(filename)
+        # plot!(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["SuperMann"])
+        # filename = "debug_x_res.png"
+        # savefig(filename)
 
         # plot(collect(1:length(residuals)), log10.(residuals), fmt = :png, xlims = (0, 1 * length(residuals)), labels=["residual"])
         # filename = "residual.png"
