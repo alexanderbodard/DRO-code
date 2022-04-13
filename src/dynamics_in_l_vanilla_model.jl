@@ -152,7 +152,7 @@ function primal_dual_alg(
     x0 :: Vector{Float64}; 
     DEBUG :: Bool = false, 
     tol :: Float64 = 1e-12, 
-    MAX_ITER_COUNT :: Int64 = 200000,
+    MAX_ITER_COUNT :: Int64 = 20000,
 )
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 0.5
@@ -286,7 +286,7 @@ function primal_dual_alg(
     return x
 end
 
-function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
+function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
     z = zeros(model.nz)
     v = zeros(model.nv)
 

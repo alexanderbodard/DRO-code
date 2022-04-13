@@ -3,7 +3,7 @@ module DRO
     ###
     # Problem definition
     ###
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff
 
     include("scenario_tree.jl")
     include("risk_constraints.jl")
@@ -32,7 +32,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 3; d = 2; nx = 2; nu = 1
+    N = 4; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
@@ -86,10 +86,11 @@ module DRO
     # println("u_ref", u_ref)
     writedlm("output/log_xref.dat", x_ref, ',')
 
-    @time solve_model(vanilla_model, [2., 2.])
+    z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true)
     @time solve_model(vanilla_model, [2., 2.], verbose=true)
-    @time solve_model(supermann_model, [2., 2.])
-    @time solve_model(supermann_model, [2., 2.], verbose=true)
+    # @time solve_model(supermann_model, [2., 2.])
+    # @time solve_model(supermann_model, [2., 2.], verbose=true)
+    @time solve_model(supermann_model, [2., 2.], verbose=true, z0 = z * 1.000000000000, v0 = v * 1.00000000000)
     # x, u = solve_model(model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)

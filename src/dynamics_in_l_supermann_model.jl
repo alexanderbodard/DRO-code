@@ -160,13 +160,28 @@ function broyden_sherman_morrison(H, delta_z, delta_R, L, alpha1, alpha2; theta_
     return H + 1 / (delta_z' * (s_tilde)) * (delta_z - (s_tilde)) * (delta_z' * H)
 end
 
+# function broyden_sherman_morrison(H, delta_z, delta_R, L, alpha1, alpha2; theta_bar = 0.5)
+#     gamma = dot_p(H * delta_R, delta_z, L, alpha1, alpha2) / dot_p(delta_z, delta_z, L, alpha1, alpha2)
+#     if abs(gamma) >= theta_bar
+#         theta = 1
+#     elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
+#         theta = (1 - theta_bar)
+#     else
+#         theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
+#     end
+
+#     s_tilde = (1 - theta) * delta_z + theta * H * delta_R # With powell
+
+#     return H + 1 / dot_p(delta_z, s_tilde, L, alpha1, alpha2) * (delta_z - (s_tilde)) * (delta_z' * H)
+# end
+
 function P_mult(x, L, alpha1, alpha2)
     x1 = x[1:size(L)[2]]; x2 = x[size(L)[2] + 1 : end]
 
     return vcat(x1 / alpha1 - L' * x2, -L * x1 + x2 / alpha2)
 end
 
-function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.)
+function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.5)
     Ps = P_mult(s, L, alpha1, alpha2)
     d = -rx
     stilde = y
@@ -209,8 +224,8 @@ function primal_dual_alg(
     x0 :: Vector{Float64}; 
     DEBUG :: Bool = false, 
     tol :: Float64 = 1e-12, 
-    MAX_ITER_COUNT :: Int64 = 200000,
-    SUPERMANN_BACKTRACKING_MAX :: Int64 = 8,
+    MAX_ITER_COUNT :: Int64 = 50000,
+    SUPERMANN_BACKTRACKING_MAX :: Int64 = 20,
     beta :: Float64 = 0.5,
     MAX_BROYDEN_K :: Int64 = 10,
     c0 :: Float64 = 0.99,
@@ -258,6 +273,7 @@ function primal_dual_alg(
         ny = length(model.y_inds)
         xinit = copy(x[1:nx])
         log_residuals = zeros(MAX_ITER_COUNT)
+        log_tau = zeros(MAX_ITER_COUNT)
     end
 
 
@@ -317,6 +333,7 @@ function primal_dual_alg(
 
             # Check for educated update
             if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
+                println("Iteration $(counter) has tau=$(tau)")
                 copyto!(x, wx)
                 copyto!(v, wv)
                 r_safe = rtilde_norm + q^counter
@@ -337,6 +354,7 @@ function primal_dual_alg(
             backtrack_count += 1
         end
         if loop === true
+            println("Iteration $(counter) has reached max")
             # Update x by avering step
             x = lambda * xbar + (1 - lambda) * x
 
@@ -350,6 +368,7 @@ function primal_dual_alg(
         if DEBUG
             log_x[counter + 1, 1:end] = x
             log_residuals[counter + 1] = r_norm
+            log_tau[counter+1] = tau
         end
 
         if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol
@@ -360,14 +379,16 @@ function primal_dual_alg(
     end
 
     if DEBUG
+        println("Writing outputs")
         writedlm("output/log_supermann_x.dat", log_x[1:counter, 1:end], ',')
         writedlm("output/log_supermann_residual.dat", log_residuals[1:counter], ',') 
+        writedlm("output/log_supermann_tau.dat", log_tau[1:counter], ',') 
     end
 
     return x
 end
 
-function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-10, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
+function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
     z = zeros(model.nz)
     v = zeros(model.nv)
 

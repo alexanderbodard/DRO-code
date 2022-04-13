@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 MathOptSetDistances = "3b969827-a86c-476c-9527-bb6f1a8fbad5"
 PGFPlotsX = "8314cec4-20b6-5062-9cdb-752b83310925"
