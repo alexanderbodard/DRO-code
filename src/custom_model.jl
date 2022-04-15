@@ -284,23 +284,83 @@ Func must be callable.
 g_lb and g_ub will be altered by calling this function.
 """
 function bisection_method!(g_lb, g_ub, tol, Q, z_temp, s, workspace_vec)
-    # while psi(g_lb)*psi(g_ub) > 0
-    #     g_ub *= 2
+    # while psi(Q, g_lb, z_temp, s, workspace_vec)*psi(Q, g_ub, z_temp, s, workspace_vec) > 0
+    #     g_lb /= 2
     # end
 
     if ( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ) > 0 # only work up to a precision of the tolerance
+        println("----------")
+        println(g_lb)
+        println(Q)
+        println(z_temp)
+        println(s)
+        println(prox_f(Q, gamma, z_temp, workspace_vec))
         error("Incorrect initial interval. Found $(psi(Q, g_lb, z_temp, s, workspace_vec)) and $(psi(Q, g_ub, z_temp, s, workspace_vec)) which results in $(( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ))")
     end
 
-    while abs(g_ub-g_lb) > tol
+    while abs(g_ub-g_lb) > tol * g_lb
         g_new = (g_lb + g_ub) / 2.
         if psi(Q, g_lb, z_temp, s, workspace_vec) * psi(Q, g_new, z_temp, s, workspace_vec) < 0
             g_ub = g_new
         else
             g_lb = g_new
         end
+        # println("g_ub = $(g_ub), g_lb = $(g_lb)")
     end
     return (g_lb + g_ub) / 2.
+end
+
+function prox_f_copy(Q, gamma, x)
+    return x ./ (Q .+ 1. / gamma) / gamma
+end
+
+function psi_copy(Q, gamma, x, s)
+    temp = prox_f_copy(Q, gamma, x)
+    return 0.5 * sum(Q .* temp.^2) - gamma - s
+end
+
+function bisection_method_copy!(g_lb, g_ub, tol, Q, x, s)
+    # if ( psi_copy(Q, g_lb, x, s) + tol ) * ( psi_copy(Q, g_ub, x, s) - tol ) > 0 # only work up to a precision of the tolerance
+    #     error("Incorrect initial interval. Found $(psi_copy(Q, g_lb, x, s)) and $(psi_copy(Q, g_ub, x, s)) which results in $(( psi_copy(Q, g_lb, x, s) + tol ) * ( psi_copy(Q, g_ub, x, s) - tol ))")
+    # end
+
+    g_new = (g_lb + g_ub) / 2
+    ps = psi_copy(Q, g_new, x, s)
+    while abs(g_ub - g_lb) > tol #abs(ps) > tol
+        if sign(ps) > 0
+            g_lb = g_new
+        elseif sign(ps) < 0
+            g_ub = g_new
+        else
+            return g_new
+            error("Should not happen")
+        end
+        g_new = (g_lb + g_ub) / 2
+        ps = psi_copy(Q, g_new, x, s)
+    end
+    return g_new
+
+    # while abs(g_ub-g_lb) > tol * g_lb
+    #     g_new = (g_lb + g_ub) / 2.
+    #     if psi_copy(Q, g_lb, x, s) * psi_copy(Q, g_new, x, s) < 0
+    #         g_ub = g_new
+    #     else
+    #         g_lb = g_new
+    #     end
+    # end
+    # return (g_lb + g_ub) / 2.
+end
+
+function epigraph_bisection(Q, x, t)
+    f = 0.5 * sum(Q .* (x.^2))
+    if f > t
+        local g_lb = 0 # TODO: How close to zero?
+        local g_ub = f - t #1. TODO: Can be tighter with gamma
+        tol = 1e-12
+        gamma_star = bisection_method_copy!(g_lb, g_ub, tol, Q, x, t)
+        return prox_f_copy(Q, gamma_star, x), t + gamma_star #* ( 1 + tol )
+    end
+    return x, t
 end
 
 function epigraph_qcqp(Q, x, t)
@@ -309,10 +369,7 @@ function epigraph_qcqp(Q, x, t)
 
     @variable(model, p[i=1:length(x)])
     @variable(model, s)
-    # @variable(model, tt >= 0)
 
-    # @objective(model, Min, sum((p[i] - x[i])^2 for i = 1:length(x)) + sum((s - t)^2))
-    # @objective(model, Min, [tt; vcat(p, s) - vcat(x, t)] in SecondOrderCone())
     @objective(model, Min, (p[1] - x[1])^2 + (p[2] - x[2])^2 + (s - t)^2)
 
     @constraint(model, 0.5 * p' * Q * p - s <= 0)
@@ -321,22 +378,23 @@ function epigraph_qcqp(Q, x, t)
     return value.(model[:p]), value.(model[:s])
 end
 
-function L_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, transp :: Bool = false)
-    transp ? model.L' * z : model.L * z
+function L_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector, transp :: Bool = false)
+    return transp ? model.L' * z : model.L * z
 end
 
-function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector{Float64}, gamma :: Float64)
+function Gamma_grad_mult(model :: DYNAMICS_IN_L_MODEL, z :: Vector, gamma :: Float64)
     temp = zeros(length(z));
-    temp[model.s_inds[1]] = 1;
-    return gamma .* temp
+    temp[model.s_inds[1]] = gamma;
+    return temp
 end
 
 function prox_f(Q, gamma, z_temp, workspace_vec)
-    copyto!(workspace_vec, z_temp)
-    for i = 1:length(z_temp)
-        workspace_vec[i] /= gamma * (Q[i] + 1. / gamma)
-    end
-    return workspace_vec
+    return z_temp / gamma ./ (Q .+ 1 / gamma)
+    # copyto!(workspace_vec, z_temp)
+    # for i = 1:length(z_temp)
+    #     workspace_vec[i] /= gamma * (Q[i] + 1. / gamma)
+    # end
+    # return workspace_vec
 end
 
 function psi(Q, gamma, z_temp, s, workspace_vec)
@@ -352,7 +410,7 @@ function psi(Q, gamma, z_temp, s, workspace_vec)
 end
 
 
-function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64})
+function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector)
     # 4a
     for ind in model.inds_4a
         z[ind] = MOD.projection_on_set(MOD.DefaultDistance(), z[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
@@ -376,21 +434,23 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
         z_temp = z[ind]
         s = z[ind[end] + 1]
 
+        z[ind], z[ind[end] + 1] = epigraph_bisection(model.Q_bars[scen_ind], z_temp, s)
+
         # f = 0.5 * sum(model.Q_bars[scen_ind] .* (z_temp.^2))
-        f = 0
-        for i = 1:length(z_temp)
-            model.workspace_vec[i] = z_temp[i]
-            model.workspace_vec[i] *= z_temp[i]
-            model.workspace_vec[i] *= model.Q_bars[scen_ind][i]
-            f += model.workspace_vec[i]
-        end
-        f *= 0.5
-        if f > s
-            local g_lb = 1e-8 # TODO: How close to zero?
-            local g_ub = f - s #1. TODO: Can be tighter with gamma
-            gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s, model.workspace_vec)
-            z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp, model.workspace_vec), s + gamma_star
-        end
+        # # f = 0
+        # # for i = 1:length(z_temp)
+        # #     model.workspace_vec[i] = z_temp[i]
+        # #     model.workspace_vec[i] *= z_temp[i]
+        # #     model.workspace_vec[i] *= model.Q_bars[scen_ind][i]
+        # #     f += model.workspace_vec[i]
+        # # end
+        # # f *= 0.5
+        # if f > s
+        #     local g_lb = 1e-12 # TODO: How close to zero?
+        #     local g_ub = f - s #1. TODO: Can be tighter with gamma
+        #     gamma_star = bisection_method!(g_lb, g_ub, 1e-8, model.Q_bars[scen_ind], z_temp, s, model.workspace_vec)
+        #     z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp, model.workspace_vec), s + gamma_star
+        # end
 
         # ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
         # z[ind], z[ind[end] + 1] = ppp, sss
@@ -405,12 +465,18 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
     return z
 end
 
-function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector{Float64}, gamma :: Float64)
+function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Vector, gamma :: Float64)
     return z - projection(model, x0, z / gamma) * gamma
 end
 
 function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
+    # error()
+    # return LA.dot(vcat(ax, av), vcat(bx, bv))
     return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
+end
+
+function p_dot(a, b, P)
+    return LA.dot(a, P*b)
 end
 
 function dot_p(a, b, L, alpha1, alpha2)

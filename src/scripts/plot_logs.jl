@@ -11,6 +11,8 @@ residual_supermann = readdlm("output/log_supermann_residual.dat", ',')
 xref = readdlm("output/log_xref.dat", ',')
 tau = readdlm("output/log_supermann_tau.dat")
 
+println(issorted(view(residual_vanilla, :), rev=true))
+
 
 ### Plot data
 
@@ -35,7 +37,7 @@ for i = 1:size(x_supermann)[1]
     append!(residues_supermann, LA.norm(x_supermann[i, 1:length(xref)] .- xref) / LA.norm(zeros(length(xref)) .- xref))
 end
 plot(1:length(residual_vanilla), residues_vanilla, fmt = :png, yaxis=:log, labels=["Vanilla"])
-plot(residues_supermann, fmt = :png, yaxis=:log, labels=["Supermann"])
+plot!(residues_supermann, fmt = :png, yaxis=:log, labels=["Supermann"])
 plot!(tau)
 filename = "output/log_absolute_error.png"
 savefig(filename)

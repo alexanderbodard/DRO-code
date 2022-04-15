@@ -12,6 +12,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     L_trans = L'
 
     L_norm = maximum(LA.svdvals(collect(L)))^2
+    # L_norm = sum(L.^2)
 
     # 4a
     inds_4a = Union{UnitRange{Int64}, Int64}[]
@@ -156,7 +157,7 @@ function primal_dual_alg(
 )
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 0.5
-    sigma = sqrt(0.99 / model.L_norm)
+    sigma = 0.99 / sqrt(model.L_norm)
     gamma = sigma
 
     # if DEBUG
