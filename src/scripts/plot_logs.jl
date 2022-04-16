@@ -12,6 +12,7 @@ xref = readdlm("output/log_xref.dat", ',')
 tau = readdlm("output/log_supermann_tau.dat")
 
 println(issorted(view(residual_vanilla, :), rev=true))
+println(issorted(view(residual_supermann, :), rev=true))
 
 
 ### Plot data

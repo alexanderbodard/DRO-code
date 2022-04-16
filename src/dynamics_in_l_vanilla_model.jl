@@ -180,6 +180,9 @@ function primal_dual_alg(
         ny = length(model.y_inds)
         xinit = copy(x[1:nx])
         log_residuals = zeros(MAX_ITER_COUNT)
+
+        P = [[1/gamma * LA.I(length(x)) -model.L']; [-model.L 1/sigma * LA.I(length(v))]]
+        # P = LA.I(length(v)+length(z))
     end
 
     # TODO: Work with some tolerance
@@ -203,7 +206,28 @@ function primal_dual_alg(
         # Compute the residual
         r_x = x - xbar
         r_v = v - vbar
-        r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
+        # r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
+        r_norm = LA.norm(vcat(r_x, r_v))
+
+
+        if DEBUG
+            # || Tz - \frac{z_{ref} + z}{2}||
+            r1 = sqrt(LA.dot(vcat(xbar - (z_ref + x) / 2, vbar - (v_ref + v) / 2), P * vcat(xbar - (z_ref + x) / 2, vbar - (v_ref + v) / 2)))
+            # || z_{ref} - z ||
+            r2 = sqrt(LA.dot(vcat(x, v) - vcat(z_ref, v_ref), P * (vcat(x, v) - vcat(z_ref, v_ref))))
+            # if r1 > 0.5 * r2 * 1.1
+            #     println("-----")
+            #     println(r1)
+            #     println(r2)
+            #     println(gamma * sigma * model.L_norm < 1)
+            #     println(x)
+            #     println(v)
+            #     println(xbar)
+            #     println(vbar)
+            #     error("Small circle condition violated in iteration $(counter)")
+            # end
+        end
+
 
         # Update x by avering step
         x = lambda * xbar + (1 - lambda) * x
@@ -218,6 +242,10 @@ function primal_dual_alg(
             log_x[counter + 1, 1:end] = x
             log_residuals[counter + 1] = r_norm
         end
+
+        # if DEBUG && counter > 0 && r_norm > log_residuals[counter]
+        #     error("Should not happen: $(counter), $(r_norm) and $(log_residuals[counter])")
+        # end
 
         # if DEBUG
         #     plot_vector[counter + 1, 1:end] = x
@@ -297,13 +325,6 @@ function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}
     end
 
     z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose)
-
-    if verbose
-        println("x: ", z[model.x_inds])
-        println("u: ", z[model.u_inds])
-        println("s: ", z[model.s_inds])
-        println("y: ", z[model.y_inds])
-    end
 
     if return_all
         return z, v, z[model.x_inds], z[model.u_inds]

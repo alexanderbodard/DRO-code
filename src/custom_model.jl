@@ -339,16 +339,6 @@ function bisection_method_copy!(g_lb, g_ub, tol, Q, x, s)
         ps = psi_copy(Q, g_new, x, s)
     end
     return g_new
-
-    # while abs(g_ub-g_lb) > tol * g_lb
-    #     g_new = (g_lb + g_ub) / 2.
-    #     if psi_copy(Q, g_lb, x, s) * psi_copy(Q, g_new, x, s) < 0
-    #         g_ub = g_new
-    #     else
-    #         g_lb = g_new
-    #     end
-    # end
-    # return (g_lb + g_ub) / 2.
 end
 
 function epigraph_bisection(Q, x, t)
@@ -358,12 +348,18 @@ function epigraph_bisection(Q, x, t)
         local g_ub = f - t #1. TODO: Can be tighter with gamma
         tol = 1e-12
         gamma_star = bisection_method_copy!(g_lb, g_ub, tol, Q, x, t)
+        res = prox_f_copy(Q, gamma_star, x)
+        # return res, 0.5 * sum(res .* Q .* res)
         return prox_f_copy(Q, gamma_star, x), t + gamma_star #* ( 1 + tol )
     end
     return x, t
 end
 
 function epigraph_qcqp(Q, x, t)
+    if 0.5 * x' * Q * x <= t
+        return x, t
+    end
+
     model = Model(Mosek.Optimizer)
     set_silent(model)
 
@@ -452,7 +448,7 @@ function projection(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
         #     z[ind], z[ind[end] + 1] = prox_f(model.Q_bars[scen_ind], gamma_star, z_temp, model.workspace_vec), s + gamma_star
         # end
 
-        # ppp, sss = epigraph_qcqp(Q_bars[scen_ind], z_temp, s)
+        # ppp, sss = epigraph_qcqp(LA.diagm(model.Q_bars[scen_ind]), z_temp, s)
         # z[ind], z[ind[end] + 1] = ppp, sss
     end
 
@@ -469,10 +465,11 @@ function prox_hstar(model :: DYNAMICS_IN_L_MODEL, x0 :: Vector{Float64}, z :: Ve
     return z - projection(model, x0, z / gamma) * gamma
 end
 
-function p_norm(ax, av, bx, bv, L, alpha1, alpha2)
-    # error()
-    # return LA.dot(vcat(ax, av), vcat(bx, bv))
-    return 1 / alpha1 * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / alpha2 * LA.dot(av, bv)
+function p_norm(ax, av, bx, bv, L, gamma, sigma)
+    # P = [[1/gamma * LA.I(length(ax)) -L']; [-L 1/sigma * LA.I(length(av))]]
+    # return LA.dot(vcat(ax, av), P * vcat(bx, bv))
+
+    return 1 / gamma * LA.dot(ax, bx) - ax' * L' * bv - av' * L * bx + 1 / sigma * LA.dot(av, bv)
 end
 
 function p_dot(a, b, P)

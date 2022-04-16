@@ -19,7 +19,7 @@ end
     Q = LA.Matrix([2.2 0; 0 3.7])
     Qdiag = [2.2, 3.7]
 
-    for _ = 1:1e1
+    for _ = 1:1e3
         x = rand(2); gamma = rand(); s = rand()
 
         f = ProximalOperators.Quadratic(Q, zeros(2))
@@ -29,46 +29,50 @@ end
     end
 end
 
-@testset "epigraph projection" begin
-    Q = LA.Matrix([2.2 0; 0 3.7])
-    Qdiag = [2.2, 3.7]
+# @testset "epigraph projection" begin
+#     Q = LA.Matrix([2.2 0; 0 3.7])
+#     Qdiag = [2.2, 3.7]
 
-    for _ = 1:1e1
-        x = rand(2); t = rand(); xx = copy(x); tt = copy(t)
-        p, s = epigraph_qcqp(Q, x, t)
-        # (p, s) \in epigraph
-        @test 0.5 * p' * Q * p <= s
+#     for _ = 1:1e1
+#         x = rand(2); t = rand(); xx = copy(x); tt = copy(t)
+#         p, s = epigraph_qcqp(Q, x, t)
+#         # (p, s) \in epigraph
+#         @test 0.5 * p' * Q * p <= s
 
-        if 0.5 * x' * Q * x <= t
-            @test isapprox(x, p, rtol=1e-6)
-            @test isapprox(t, s, rtol=1e-6)
-        end
+#         if 0.5 * x' * Q * x <= t
+#             @test isapprox(x, p)
+#             @test isapprox(t, s)
+#         end
 
-        pp, ss = epigraph_bisection(Qdiag, x, t)
-        # (pp, ss) \in epigraph
-        # @test 0.5 * pp' * Q * pp <= ss
+#         pp, ss = epigraph_bisection(Qdiag, x, t)
+#         # (pp, ss) \in epigraph
+#         @test 0.5 * pp' * Q * pp <= ss
 
-        if 0.5 * x' * Q * x > t
-            # When (x, t) is not on the epigraph, the projection must be on the boundary
-            @test isapprox(0.5 * p' * Q * p, s, rtol=1e-6)
-            @test isapprox(0.5 * pp' * Q * pp, ss)
-        end
+#         if 0.5 * x' * Q * x <= t
+#             @test isapprox(x, pp)
+#             @test isapprox(t, ss)
+#         end
+#         if 0.5 * x' * Q * x > t
+#             # When (x, t) is not on the epigraph, the projection must be on the boundary
+#             @test isapprox(0.5 * p' * Q * p, s)
+#             @test isapprox(0.5 * pp' * Q * pp, ss)
+#         end
 
-        gamma_star = ss - t
-        if gamma_star > 0
-            p_test = prox_f_copy(Qdiag, s - t, x)
-            isapprox(p_test, p)
-        end
+#         gamma_star = ss - t
+#         if gamma_star > 0
+#             p_test = prox_f_copy(Qdiag, s - t, x)
+#             isapprox(p_test, p)
+#         end
 
-        # println("x: $(x)")
-        # @test isapprox(pp, p, rtol=1e-6)
-        # println("t: $(t)")
-        # @test isapprox(ss, s, rtol=1e-6)
+#         # println("x: $(x)")
+#         # @test isapprox(pp, p, rtol=1e-6)
+#         # println("t: $(t)")
+#         # @test isapprox(ss, s, rtol=1e-6)
 
-        # println("Difference: ", (ss - s) / s)
+#         # println("Difference: ", (ss - s) / s)
 
-        # Variables x and t have not been altered
-        @test isapprox(xx, x, atol=1e-16)
-        @test isapprox(tt, t, atol=1e-16)
-    end
-end
+#         # Variables x and t have not been altered
+#         @test isapprox(xx, x, atol=1e-16)
+#         @test isapprox(tt, t, atol=1e-16)
+#     end
+# end
