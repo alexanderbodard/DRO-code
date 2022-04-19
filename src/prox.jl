@@ -228,7 +228,7 @@ x = zeros(nx); v = zeros(nv)
 Lnorm = maximum(LA.svdvals(collect(L)))
 gamma = (0.99) / Lnorm
 sigma = gamma
-lambda = 0.5#rand()
+lambda = 0.5
 
 # println(primal_dual(x, v, L, sigma, gamma, lambda))
 # solve_model(model, [.2, .2], tol=1e-8)
@@ -339,64 +339,4 @@ for i=1:1e4
         error("CP update is not FNE, iteration $(i)")
     end
 end
-
-####################################
-# Projection onto C_w FNE (P-norm)
-####################################
-
-function p_dot(a, b, P)
-    return LA.dot(a, P*b)
-end
-
-function project_cw(z, r_wx, r_wv, wx, wv, P)
-    w = vcat(wx, wv)
-
-    cw = vcat(r_wx, r_wv)
-    cw_norm_squared = p_dot(cw, cw, P)
-    bw = p_dot(cw, w, P) - cw_norm_squared
-
-    proj = z - (p_dot(z, cw, P) - bw) / cw_norm_squared * cw
-    return proj
-end
-
-for i = 1:1e4
-    local x = rand(nx); local xx = copy(x)
-    local v = rand(nv); local vv = copy(v)
-
-    local gamma = rand() / Lnorm; local sigma = rand() / Lnorm; local lambda = rand()
-    local P = [[1/gamma * LA.I(nx) -L']; [-L 1/sigma * LA.I(nv)]]
-
-    local wx = x + rand(nx)
-    local wv = v + rand(nv)
-
-    local wxbar = prox_f(wx - gamma .* (L' * wv), gamma, model.s_inds[1])
-    local wvbar = prox_g(model, wv + sigma .* (L * (2 * wxbar - wx)), sigma)
-
-    local r_wx = wx - wxbar
-    local r_wv = wv - wvbar
-
-    local z1 = vcat(x, v)
-    T1 = project_cw(z1, r_wx, r_wv, wx, wv, P)
-
-    local wx = x + rand(nx)
-    local wv = v + rand(nv)
-
-    local wxbar = prox_f(wx - gamma .* (L' * wv), gamma, model.s_inds[1])
-    local wvbar = prox_g(model, wv + sigma .* (L * (2 * wxbar - wx)), sigma)
-
-    local r_wx = wx - wxbar
-    local r_wv = wv - wvbar
-
-    local z2 = vcat(x, v)
-    T2 = project_cw(z2, r_wx, r_wv, wx, wv, P)
-
-    # Averaging property
-    if !(pnorm(T1 - T2, P)^2 + pnorm(z1 - T1 - (z2 - T2), P)^2 <= pnorm(z1 - z2, P)^2 * (1. + tol))
-        error("Projection on C_w is not FNE, iteration $(i)")
-    end
-end
-
-####################################
-# K2 update is averaged with alpha = lambda / 2 (P-norm)
-####################################
 

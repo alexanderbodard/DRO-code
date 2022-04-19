@@ -1,8 +1,3 @@
-# using JuMP
-
-# include("scenario_tree.jl")
-# include("dynamics.jl")
-
 ###
 # Cost
 ###

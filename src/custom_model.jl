@@ -277,39 +277,6 @@ end
 # Solve stage
 ############################################################
 
-"""
-Performs a bisection method.
-
-Func must be callable.
-g_lb and g_ub will be altered by calling this function.
-"""
-function bisection_method!(g_lb, g_ub, tol, Q, z_temp, s, workspace_vec)
-    # while psi(Q, g_lb, z_temp, s, workspace_vec)*psi(Q, g_ub, z_temp, s, workspace_vec) > 0
-    #     g_lb /= 2
-    # end
-
-    if ( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ) > 0 # only work up to a precision of the tolerance
-        println("----------")
-        println(g_lb)
-        println(Q)
-        println(z_temp)
-        println(s)
-        println(prox_f(Q, gamma, z_temp, workspace_vec))
-        error("Incorrect initial interval. Found $(psi(Q, g_lb, z_temp, s, workspace_vec)) and $(psi(Q, g_ub, z_temp, s, workspace_vec)) which results in $(( psi(Q, g_lb, z_temp, s, workspace_vec) + tol ) * ( psi(Q, g_ub, z_temp, s, workspace_vec) - tol ))")
-    end
-
-    while abs(g_ub-g_lb) > tol * g_lb
-        g_new = (g_lb + g_ub) / 2.
-        if psi(Q, g_lb, z_temp, s, workspace_vec) * psi(Q, g_new, z_temp, s, workspace_vec) < 0
-            g_ub = g_new
-        else
-            g_lb = g_new
-        end
-        # println("g_ub = $(g_ub), g_lb = $(g_lb)")
-    end
-    return (g_lb + g_ub) / 2.
-end
-
 function prox_f_copy(Q, gamma, x)
     return x ./ (Q .+ 1. / gamma) / gamma
 end

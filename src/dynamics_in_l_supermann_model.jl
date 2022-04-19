@@ -268,7 +268,7 @@ function primal_dual_alg(
     c0 :: Float64 = 0.99,
     c1 :: Float64 = 0.99,
     q :: Float64 = 0.99,
-    LOW_MEMORY :: Bool = false
+    LOW_MEMORY :: Bool = true
 )
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 1.#0.5
@@ -281,7 +281,6 @@ function primal_dual_alg(
     r_safe = Inf  # Correct initial value is set during first iteration
     eta = r_safe
     broyden_k = 0
-    didk2 = false
 
     wx = zeros(length(x))
     wv = zeros(length(v))
@@ -307,14 +306,13 @@ function primal_dual_alg(
 
     D = 1e4
     P = [[1/gamma * LA.I(length(x)) -model.L']; [-model.L 1/sigma * LA.I(length(v))]]
-    PP = LA.I(length(x) + length(v))
-    # PP = P
     rho = 0
     rtilde_norm = 0
 
     if DEBUG
         n_z = length(x)
         log_x = zeros(MAX_ITER_COUNT, n_z)
+        log_v = zeros(MAX_ITER_COUNT, length(v))
         nx = length(model.x_inds)
         nu = length(model.u_inds)
         ns = length(model.s_inds)
@@ -323,15 +321,6 @@ function primal_dual_alg(
         log_residuals = zeros(MAX_ITER_COUNT)
         log_tau = zeros(MAX_ITER_COUNT)
     end
-
-    f(z::Vector) = begin
-        xxx = copy(z[1:length(wx)])
-        vvv = copy(z[length(wx) + 1 : end])
-        xbars = xxx - L_mult(model, vvv*gamma, true) - Gamma_grad_mult(model, xxx, gamma)
-        vbars = prox_hstar(model, x0, v + L_mult(model, sigma * (2 * xbars - xxx)), sigma)
-        return vcat(xxx - xbars, vvv - vbars)
-    end
-
 
     # TODO: Work with some tolerance
     counter = 0
@@ -356,37 +345,10 @@ function primal_dual_alg(
         r_v = v - vbar
         r_norm_old = r_norm
         r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
-        # r_norm = sqrt(LA.dot(vcat(r_x, r_v), P * vcat(r_x, r_v)))
 
         if counter === 0
             r_norm0 = r_norm
         end
-
-        if DEBUG && false
-            # || Tz - \frac{z_{ref} + z}{2}||
-            r1 = sqrt(LA.dot(vcat(xbar - (z_ref + x) / 2, vbar - (v_ref + v) / 2), P * vcat(xbar - (z_ref + x) / 2, vbar - (v_ref + v) / 2)))
-            # || z_{ref} - z ||
-            r2 = sqrt(LA.dot(vcat(x, v) - vcat(z_ref, v_ref), P * (vcat(x, v) - vcat(z_ref, v_ref))))
-            if r1 > 0.5 * r2
-                println(r1)
-                println(r2)
-                println(gamma * sigma * model.L_norm < 1)
-                println(x)
-                println(v)
-                error("Small circle condition violated in iteration $(counter)")
-            end
-        end
-
-        if didk2 && r_norm > r_norm_old && false
-            println("K2 update increased our norm!: Iteration $(counter), difference is $(r_norm - r_norm_old)")
-        end
-        # if didk2 && p_norm(x - z_ref, v - v_ref, x - z_ref, v - v_ref, model.L, gamma, sigma) <= p_norm(xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, model.L, gamma, sigma) - k2_sigma * r_norm_old^2
-        #     println("Should happen: Iteration $(counter), difference is $(p_norm(xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, model.L, gamma, sigma) - k2_sigma * r_norm_old^2 - p_norm(x - z_ref, v - v_ref, x - z_ref, v - v_ref, model.L, gamma, sigma))")
-        # elseif didk2
-        #     println("NOT GOOD! Counter: $(counter), $(p_norm(x - z_ref, v - v_ref, x - z_ref, v - v_ref, model.L, gamma, sigma)) and $(p_norm(xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, model.L, gamma, sigma) ) and $(k2_sigma * r_norm_old^2)")
-        #     println("--> difference is $(p_norm(xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, xold[1:length(x)] - z_ref, xold[length(x)+1:end] - v_ref, model.L, gamma, sigma) - k2_sigma * r_norm_old^2 - p_norm(x - z_ref, v - v_ref, x - z_ref, v - v_ref, model.L, gamma, sigma))")
-        # end
-        didk2 = false
 
         # Choose an update direction
         if !LOW_MEMORY
@@ -395,52 +357,35 @@ function primal_dual_alg(
             xresold = vcat(x - xbar, v - vbar)
             d_xv = -H * vcat(r_x, r_v)
             d_x = d_xv[1:length(x)]; d_v = d_xv[length(x)+1 : end]
-            d_norm = sqrt(p_norm(d_x, d_v, d_x, d_v, model.L, gamma, sigma))
-            if d_norm > D * r_norm
-                d_x = D * (r_norm / d_norm) * d_x
-                d_v = D * (r_norm / d_norm) * d_v
-            end
-            # d_x = -H[1:length(x), 1:end] * vcat(r_x, r_v)
-            # d_v = -H[length(x)+1 : end, 1:end] * vcat(r_x, r_v)
-        else
-            # println(x, v)
-            # jacob = ForwardDiff.jacobian(f, vcat(copy(x), copy(v)))
-            # jacob[LA.diagind(jacob)] .+= 0.1
-            # try
-            #     d_xv = jacob \ vcat(-r_x, -r_v)
-            #     # println(d_xv)
-            # catch e
-            #     println(e)
-            #     d_xv, broyden_k = broyden(S, Stilde, PS, d_xv, vcat(wx, wv) - xold, vcat(wx - wxbar, wv - wvbar) - xresold, vcat(x - xbar, v - vbar), broyden_k, model.L, gamma, sigma, MAX_K = MAX_BROYDEN_K)
-            # end
-            
+        else            
             d_xv, broyden_k = broyden(S, Stilde, PS, d_xv, vcat(wx, wv) - xold, vcat(wx - wxbar, wv - wvbar) - xresold, vcat(x - xbar, v - vbar), broyden_k, model.L, gamma, sigma, MAX_K = MAX_BROYDEN_K)
-            
             d_x = d_xv[1:length(x)]; d_v = d_xv[length(x) + 1 : end]
             xold = vcat(x, v)
             xresold = vcat(x - xbar, v - vbar)
-
-            # println(x)
         end
 
-        # d_x = zeros(length(d_x)); d_v = zeros(length(d_v))
+        d_norm = sqrt(p_norm(d_x, d_v, d_x, d_v, model.L, gamma, sigma))
+        if d_norm > D * r_norm
+            d_x = D * (r_norm / d_norm) * d_x
+            d_v = D * (r_norm / d_norm) * d_v
+        end
 
         loop = true
         backtrack_count = 0
 
-        # if r_norm <= c0 * eta
-        #     eta = r_norm
-        #     x += d_x
-        #     v += d_v
+        # Blind update
+        if r_norm <= c0 * eta && false
+            eta = r_norm
+            x += d_x
+            v += d_v
 
+            wx = copy(x)
+            wv = copy(v)
+            wxbar = wx - L_mult(model, wv * gamma, true) - Gamma_grad_mult(model, wx, gamma)
+            wvbar = prox_hstar(model, x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
 
-        #     wx = copy(x)
-        #     wv = copy(v)
-        #     wxbar = wx - L_mult(model, wv * gamma, true) - Gamma_grad_mult(model, wx, gamma)
-        #     wvbar = prox_hstar(model, x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
-
-        #     loop = false
-        # end
+            loop = false
+        end
 
         # Update tau
         tau = 1
@@ -452,31 +397,13 @@ function primal_dual_alg(
 
             wxbar = wx - L_mult(model, wv * gamma, true) - Gamma_grad_mult(model, wx, gamma)
             wvbar = prox_hstar(model, x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
-            # println("Iteration $(counter)")
 
             r_wx = wx - wxbar
             r_wv = wv - wvbar
             rtilde_norm = sqrt(p_norm(r_wx, r_wv, r_wx, r_wv, model.L, gamma, sigma))
 
-            if DEBUG && false
-                # || Tz - \frac{z_{ref} + z}{2}||
-                r1 = sqrt(LA.dot(vcat(wxbar - (z_ref + wx) / 2, wvbar - (v_ref + wv) / 2), P * vcat(wxbar - (z_ref + wx) / 2, wvbar - (v_ref + wv) / 2)))
-                # || z_{ref} - z ||
-                r2 = sqrt(LA.dot(vcat(wx, wv) - vcat(z_ref, v_ref), P * (vcat(wx, wv) - vcat(z_ref, v_ref))))
-                if r1 > 0.5 * r2
-                    println(r1)
-                    println(r2)
-                    println(gamma * sigma * model.L_norm < 1)
-                    println(r_wx)
-                    println(r_wv)
-                    error("Small circle condition violated by W in iteration $(counter)")
-                end
-            end
-
             # Check for educated update
-            # println("$(r_safe - r_norm) and $(c1 * r_norm - rtilde_norm)")
             if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
-                println("Iteration $(counter) has tau=$(tau)")
                 copyto!(x, wx)
                 copyto!(v, wv)
                 r_safe = rtilde_norm + q^counter# * r_norm0
@@ -485,49 +412,10 @@ function primal_dual_alg(
             end
             # Check for GKM update
             rho = p_norm(r_wx, r_wv, r_wx - tau * d_x, r_wv - tau * d_v, model.L, gamma, sigma)
-            # rho = LA.dot(vcat(r_wx, r_wv), vcat(r_wx, r_wv)) - LA.dot(vcat(r_wx, r_wv), vcat(wx - x, wv - v))
-            # rho = LA.dot(vcat(r_wx, r_wv), P * vcat(r_wx, r_wv)) - LA.dot(vcat(r_wx, r_wv), P * vcat(tau * d_x, tau * d_v))
-            # rho = p_norm(r_wx, r_wv, x - wxbar, v - wvbar, model.L, gamma, sigma)
-            # println("--------------")
-            # println("$(rho) and $(k2_sigma * r_norm * rtilde_norm)")
-            # println("$(LA.dot(vcat(r_wx, r_wv), vcat(r_wx - tau * d_x, r_wv - tau * d_v))) and $(k2_sigma * LA.norm(vcat(r_wx, r_wv)) * LA.norm(vcat(r_x, r_v)))")
-
             if rho >= k2_sigma * r_norm * rtilde_norm
-                if DEBUG
-                    z1 = vcat(x, v)
-                    z2 = rand(length(x) + length(v))
-                    znorm = sqrt(p_dot(z1 - z2, z1 - z2, PP))
-
-                    w = vcat(wx, wv)
-
-                    cw = vcat(r_wx, r_wv)
-                    cw_norm_squared = p_dot(cw, cw, PP)
-                    bw = p_dot(cw, w, PP) - cw_norm_squared
-                    
-                    proj1 = z1 - (p_dot(z1, cw, PP) - bw) / cw_norm_squared * cw
-                    proj2 = z2 - (p_dot(z2, cw, PP) - bw) / cw_norm_squared * cw
-                    proj_norm = sqrt(p_dot(proj1 - proj2, proj1 - proj2, PP))
-                    if proj_norm > znorm
-                        println("---\nProjection is expansive in iteration $(counter).\nProjection norm: $(proj_norm), z_norm: $(znorm)\nShould project? $(p_dot(z, cw, PP) > bw), <c, z> = $(p_dot(z, cw, PP)), bw = $(bw)")
-                        println("Should be equal if projection worked: $(p_dot(cw, proj, PP)) versus $(bw)")
-                    else
-                        temp = lambda / 2 * z1 + (1 - lambda / 2) * proj1
-                        # println(temp[1:5])
-                    end
-                end
-
-                didk2 = true
-                # println("--------------")
-                # println("$(rho) and $(k2_sigma * r_norm * rtilde_norm)")
-                # println("$(LA.dot(vcat(r_wx, r_wv), P * vcat(r_wx, r_wv)) - LA.dot(vcat(r_wx, r_wv), P * vcat(wx - x, wv - v)))")
-                # println("Iteration $(counter) has GKM update with tau = $(tau)")
-                # rho = lambda * rho / rtilde_norm^2
-
                 rho /= rtilde_norm^2
                 x = x - lambda * rho * r_wx
                 v = v - lambda * rho * r_wv
-                # println(x[1:5])
-                # error()
                 loop = false
                 break
             end
@@ -536,7 +424,6 @@ function primal_dual_alg(
             backtrack_count += 1
         end
         if loop === true
-            println("Iteration $(counter) has reached max")
             # Update x by avering step
             x = lambda * xbar + (1 - lambda) * x
 
@@ -549,25 +436,12 @@ function primal_dual_alg(
 
         if DEBUG
             log_x[counter + 1, 1:end] = x
+            log_v[counter + 1, 1:end] = v
             log_residuals[counter + 1] = r_norm
             log_tau[counter+1] = tau
-
-            # println("R norm: ", r_norm)
-
-            if counter > 0 && didk2 && p_dot(vcat(x, v), vcat(x, v), P) > p_dot(xold, xold, P) && false
-                println("This really should not happen")
-            end
-
-            if counter > 0 && r_norm > log_residuals[counter] && false
-                println(rho)
-                println(rtilde_norm)
-                # println(LA.norm(vcat(r_wx, r_wv)))
-                println(p_norm(r_wx, r_wv, tau * d_x, tau * d_v, model.L, gamma, sigma))
-                error("Should not happen: $(counter), $(r_norm) and $(log_residuals[counter])")
-            end
         end
 
-        if r_norm < tol * sqrt(LA.norm(x)^2 + LA.norm(v)^2)
+        if r_norm < tol
             println("Breaking!", counter)
             break
         end
@@ -577,6 +451,7 @@ function primal_dual_alg(
     if DEBUG
         println("Writing outputs")
         writedlm("output/log_supermann_x.dat", log_x[1:counter, 1:end], ',')
+        writedlm("output/log_supermann_v.dat", log_v[1:counter, 1:end], ',')
         writedlm("output/log_supermann_residual.dat", log_residuals[1:counter], ',') 
         writedlm("output/log_supermann_tau.dat", log_tau[1:counter], ',') 
     end
@@ -594,13 +469,6 @@ function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float6
     end
 
     z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose)
-
-    if verbose
-        println("x: ", z[model.x_inds])
-        println("u: ", z[model.u_inds])
-        println("s: ", z[model.s_inds])
-        println("y: ", z[model.y_inds])
-    end
 
     if return_all
         return z, v, z[model.x_inds], z[model.u_inds]

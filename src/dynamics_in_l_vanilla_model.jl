@@ -174,6 +174,7 @@ function primal_dual_alg(
     if DEBUG
         n_z = length(x)
         log_x = zeros(MAX_ITER_COUNT, n_z)
+        log_v = zeros(MAX_ITER_COUNT, length(v))
         nx = length(model.x_inds)
         nu = length(model.u_inds)
         ns = length(model.s_inds)
@@ -206,28 +207,7 @@ function primal_dual_alg(
         # Compute the residual
         r_x = x - xbar
         r_v = v - vbar
-        # r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
-        r_norm = LA.norm(vcat(r_x, r_v))
-
-
-        if DEBUG
-            # || Tz - \frac{z_{ref} + z}{2}||
-            r1 = sqrt(LA.dot(vcat(xbar - (z_ref + x) / 2, vbar - (v_ref + v) / 2), P * vcat(xbar - (z_ref + x) / 2, vbar - (v_ref + v) / 2)))
-            # || z_{ref} - z ||
-            r2 = sqrt(LA.dot(vcat(x, v) - vcat(z_ref, v_ref), P * (vcat(x, v) - vcat(z_ref, v_ref))))
-            # if r1 > 0.5 * r2 * 1.1
-            #     println("-----")
-            #     println(r1)
-            #     println(r2)
-            #     println(gamma * sigma * model.L_norm < 1)
-            #     println(x)
-            #     println(v)
-            #     println(xbar)
-            #     println(vbar)
-            #     error("Small circle condition violated in iteration $(counter)")
-            # end
-        end
-
+        r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
 
         # Update x by avering step
         x = lambda * xbar + (1 - lambda) * x
@@ -240,17 +220,9 @@ function primal_dual_alg(
 
         if DEBUG
             log_x[counter + 1, 1:end] = x
+            log_v[counter + 1, 1:end] = v
             log_residuals[counter + 1] = r_norm
         end
-
-        # if DEBUG && counter > 0 && r_norm > log_residuals[counter]
-        #     error("Should not happen: $(counter), $(r_norm) and $(log_residuals[counter])")
-        # end
-
-        # if DEBUG
-        #     plot_vector[counter + 1, 1:end] = x
-        #     residuals[counter + 1] = r_norm
-        # end
 
         if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol
             println("Breaking!", counter)
@@ -259,57 +231,10 @@ function primal_dual_alg(
         counter += 1
     end
 
-    # if DEBUG        
-    #     residues = Float64[]
-    #     for i = 1:counter
-    #         append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
-    #     end
-    #     plot(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["Vanilla"])
-    # end
-
     if DEBUG
         writedlm("output/log_vanilla_x.dat", log_x[1:counter, 1:end], ',')
+        writedlm("output/log_vanilla_v.dat", log_v[1:counter, 1:end], ',')
         writedlm("output/log_vanilla_residual.dat", log_residuals[1:counter], ',') 
-    end
-
-    if DEBUG
-        # residues = Float64[]
-        # for i = 1:counter
-        #     append!(residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- x_ref) / LA.norm(xinit .- x_ref))
-        # end
-        # fixed_point_residues = Float64[]
-        # for i = 2:counter
-        #     append!(fixed_point_residues, LA.norm(plot_vector[i, 1:length(model.x_inds)] .- plot_vector[i-1, 1:length(model.x_inds)]) / LA.norm(plot_vector[i, 1:length(model.x_inds)]))
-        # end
-
-        # pgfplotsx()
-        # plot(collect(1:length(fixed_point_residues)), log10.(fixed_point_residues), fmt = :png, xlims = (0, 1 * length(fixed_point_residues)), labels=["fixed_point_residue_x"])
-        # filename = "fixed_point_residue_x.png"
-        # savefig(filename)
-
-        # plot!(collect(1:length(residues)), log10.(residues), fmt = :png, labels=["SuperMann"])
-        # filename = "debug_x_res.png"
-        # savefig(filename)
-
-        # plot(collect(1:length(residuals)), log10.(residuals), fmt = :png, xlims = (0, 1 * length(residuals)), labels=["residual"])
-        # filename = "residual.png"
-        # savefig(filename)
-
-        # plot(plot_vector[1:counter, 1 : nx], fmt = :png, labels=["x"])
-        # filename = "debug_x.png"
-        # savefig(filename)
-
-        # plot(plot_vector[1:counter, nx + 1 : nx + nu], fmt = :png, labels=["u"])
-        # filename = "debug_u.png"
-        # savefig(filename)
-
-        # plot(plot_vector[1:counter, nx + nu + 1 : nx + nu + ns], fmt = :png, labels=["s"])
-        # filename = "debug_s.png"
-        # savefig(filename)
-
-        # plot(plot_vector[1:counter, nx + nu + ns + 1 : nx + nu + ns + ny], fmt = :png, labels=["y"])
-        # filename = "debug_y.png"
-        # savefig(filename)
     end
 
     return x
