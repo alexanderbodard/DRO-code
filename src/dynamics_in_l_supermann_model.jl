@@ -263,7 +263,7 @@ function primal_dual_alg(
     MAX_ITER_COUNT :: Int64 = 20000,
     SUPERMANN_BACKTRACKING_MAX :: Int64 = 8,
     beta :: Float64 = 0.5,
-    MAX_BROYDEN_K :: Int64 = 250,
+    MAX_BROYDEN_K :: Int64 = 20,
     k2_sigma :: Float64 = 0.1,
     c0 :: Float64 = 0.99,
     c1 :: Float64 = 0.99,
@@ -277,7 +277,6 @@ function primal_dual_alg(
 
     r_norm = 0
     r_norm0 = Inf
-    r_norm_old = Inf
     r_safe = Inf  # Correct initial value is set during first iteration
     eta = r_safe
     broyden_k = 0
@@ -343,7 +342,6 @@ function primal_dual_alg(
         # Compute the residual
         r_x = x - xbar
         r_v = v - vbar
-        r_norm_old = r_norm
         r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
 
         if counter === 0
@@ -424,10 +422,10 @@ function primal_dual_alg(
             backtrack_count += 1
         end
         if loop === true
-            # Update x by avering step
+            # Update x by averaging step
             x = lambda * xbar + (1 - lambda) * x
 
-            # Update v by avering step
+            # Update v by averaging step
             for i = 1:length(v)
                 v[i] *= (1 - lambda)
                 v[i] += lambda * vbar[i]
@@ -441,7 +439,7 @@ function primal_dual_alg(
             log_tau[counter+1] = tau
         end
 
-        if r_norm < tol
+        if r_norm < tol && false
             println("Breaking!", counter)
             break
         end

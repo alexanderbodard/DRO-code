@@ -21,8 +21,6 @@ module DRO
     import MathOptSetDistances as MOD
     import LinearAlgebra as LA
 
-    Random.seed!(1234)
-
     ##########################
     # Mosek reference implementation
     ##########################
@@ -80,19 +78,19 @@ module DRO
     # Solve the optimization problem
     ###
 
-    # @time solve_model(reference_model, [2., 2.])
-    x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
+    @time solve_model(reference_model, [2., 2.])
+    # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
 
     # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
-    # z_ref = copy(z)
-    # v_ref = copy(v)
+    # @time solve_model(vanilla_model, [2., 2.], verbose=false)
     @time solve_model(vanilla_model, [2., 2.], verbose=false)
     @time solve_model(vanilla_model, [2., 2.], verbose=false)
-    @time solve_model(supermann_model, [2., 2.], verbose=false)
-    @time solve_model(supermann_model, [2., 2.], verbose=false)
-    # x, u = solve_model(model, [2., 2.], verbose=false)
+    # @time solve_model(supermann_model, [2., 2.], verbose=false)
+    # @time solve_model(supermann_model, [2., 2.], verbose=false)
     # println("x: ", x)
     # println("u: ", u)
+
+    # println(vanilla_model.z)
 
     # writedlm("output/L.dat", vanilla_model.L, '\t')
     # writedlm("output/log_xref.dat", vcat(x_ref, u_ref, s_ref, y_ref), ',')

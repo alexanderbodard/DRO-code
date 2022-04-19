@@ -138,7 +138,15 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
             (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
         ),
         zeros(n_z),
-        zeros(n_L)
+        zeros(n_L),
+        zeros(n_L),
+        zeros(n_z),
+        zeros(n_L),
+        zeros(n_z),
+        zeros(n_L),
+        zeros(n_z),
+        zeros(n_L),
+        zeros(scen_tree.n_x)
     )
 end
 
@@ -160,17 +168,6 @@ function primal_dual_alg(
     sigma = 0.99 / sqrt(model.L_norm)
     gamma = sigma
 
-    # if DEBUG
-    #     n_z = length(x)
-    #     plot_vector = zeros(MAX_ITER_COUNT, n_z)
-    #     nx = length(model.x_inds)
-    #     nu = length(model.u_inds)
-    #     ns = length(model.s_inds)
-    #     ny = length(model.y_inds)
-    #     xinit = copy(x[1:nx])
-    #     residuals = zeros(MAX_ITER_COUNT)
-    # end
-
     if DEBUG
         n_z = length(x)
         log_x = zeros(MAX_ITER_COUNT, n_z)
@@ -183,7 +180,6 @@ function primal_dual_alg(
         log_residuals = zeros(MAX_ITER_COUNT)
 
         P = [[1/gamma * LA.I(length(x)) -model.L']; [-model.L 1/sigma * LA.I(length(v))]]
-        # P = LA.I(length(v)+length(z))
     end
 
     # TODO: Work with some tolerance
@@ -209,10 +205,10 @@ function primal_dual_alg(
         r_v = v - vbar
         r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
 
-        # Update x by avering step
+        # Update x by averaging step
         x = lambda * xbar + (1 - lambda) * x
 
-        # Update v by avering step
+        # Update v by averaging step
         for i = 1:length(v)
             v[i] *= (1 - lambda)
             v[i] += lambda * vbar[i]
@@ -224,7 +220,7 @@ function primal_dual_alg(
             log_residuals[counter + 1] = r_norm
         end
 
-        if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol
+        if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol && false
             println("Breaking!", counter)
             break
         end
@@ -240,19 +236,165 @@ function primal_dual_alg(
     return x
 end
 
+function prox_f!(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL,
+    arg :: Vector{Float64},
+    gamma :: Float64
+)
+    copyto!(model.zbar, arg)
+    model.zbar[model.s_inds[1]] -= gamma    
+end
+
+function projection!(
+    model :: DYNAMICS_IN_L_MODEL,
+)
+    # 4a
+    for ind in model.inds_4a
+        model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), model.vv_workspace[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
+    end
+
+    # 4b
+    model.vv_workspace[model.inds_4b] = MOD.projection_on_set(MOD.DefaultDistance(), model.vv_workspace[model.inds_4b], MOI.Nonpositives(4)) # TODO: Fix polar cone
+    
+    # 4c
+    for (i, ind) in enumerate(model.inds_4c)
+        b_bar = model.b_bars[i]
+        dot_p = LA.dot(model.vv_workspace[ind], b_bar)
+        if dot_p > 0
+            model.vv_workspace[ind] = model.vv_workspace[ind] - dot_p / LA.dot(b_bar, b_bar) .* b_bar
+        end
+    end
+
+    # 4d: Compute projection
+    for (scen_ind, ind) in enumerate(model.inds_4d)
+        z_temp = model.vv_workspace[ind]
+        s = model.vv_workspace[ind[end] + 1]
+
+        model.vv_workspace[ind], model.vv_workspace[ind[end] + 1] = epigraph_bisection(model.Q_bars[scen_ind], z_temp, s)
+
+        # ppp, sss = epigraph_qcqp(LA.diagm(model.Q_bars[scen_ind]), z_temp, s)
+        # z[ind], z[ind[end] + 1] = ppp, sss
+    end
+
+    # 4e: Dynamics
+    model.vv_workspace[model.inds_4e] = zeros(length(model.inds_4e))
+
+    # Initial condition
+    model.vv_workspace[end - length(model.x0) + 1 : end] = model.x0
+end
+
+function prox_g!(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL,
+    arg :: Vector{Float64},
+    sigma :: Float64
+)
+    # TODO: Write a bit more efficient
+    # TODO: Remove model.x0 as argument
+
+    # vv_workspace = arg / sigma
+    copyto!(model.vv_workspace, arg)
+    LA.BLAS.scal!(model.nv, 1. / sigma, model.vv_workspace, stride(model.vv_workspace, 1))
+
+    # Result is stored in vv_workspace
+    projection!(model)
+    
+    LA.BLAS.axpy!(-sigma, model.vv_workspace, arg)
+    copyto!(model.vbar, arg)
+end
+
+function update_zvbar!(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL,
+    gamma :: Float64,
+    sigma :: Float64
+)
+    ### Compute zbar
+    copyto!(model.z_workspace, model.z)
+    # z_workspace = -gamma * L' * v + z_workspace
+    # LA.BLAS.gemv!('T', -gamma, model.L, model.v, 1., model.z_workspace)
+    LA.mul!(model.z_workspace, model.L', model.v, -gamma, 1.)
+    prox_f!(model, model.z_workspace , gamma)
+
+    ### Compute vbar
+    copyto!(model.z_workspace, model.z)
+    # z_workspace = 2 * zbar - z_workspace
+    LA.BLAS.axpby!(2., model.zbar, -1., model.z_workspace)
+    copyto!(model.v_workspace, model.v)
+    # v_workspace = sigma * L * z_workspace + v_workspace
+    LA.mul!(model.v_workspace, model.L, model.z_workspace, sigma, 1.)
+    prox_g!(model, model.v_workspace, sigma)
+end
+
+function get_rnorm(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL
+)
+    # TODO: Implement this
+    return NaN
+end
+
+function update_residual!(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL
+)
+    ### Update model.rz
+    copyto!(model.rz, model.z)
+    # rz = z - zbar
+    LA.BLAS.axpy!(-1., model.zbar, model.rz)
+
+    ### Update model.rv
+    copyto!(model.rv, model.v)
+    # rv = v - vbar
+    LA.BLAS.axpy!(-1., model.vbar, model.rv)
+
+    ### Update model.rnorm
+    return get_rnorm(model)
+end
+
+function update_zv!(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL,
+    lambda :: Float64
+)
+    ### Update z
+    # z = lambda * zbar + (1 - lambda) * z
+    LA.BLAS.axpby!(lambda, model.zbar, 1 - lambda, model.z)
+
+    ### Update v
+    # v = lambda * vbar + (1 - lambda) * v
+    LA.BLAS.axpby!(lambda, model.vbar, 1 - lambda, model.v)
+end
+
+function primal_dual_alg!(
+    model :: DYNAMICS_IN_L_VANILLA_MODEL;
+    MAX_ITER_COUNT :: Int64 = 20000,
+    tol :: Float64 = 1e-10
+)
+    iter = 0
+    rnorm = Inf
+    
+    # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
+    lambda = 0.5
+    sigma = 0.99 / sqrt(model.L_norm)
+    gamma = sigma
+
+    while iter < MAX_ITER_COUNT
+        update_zvbar!(model, gamma, sigma)
+        rnorm = update_residual!(model)
+        update_zv!(model, lambda)
+
+        if rnorm < tol
+            println("Breaking!", iter)
+            break
+        end
+
+        iter += 1
+    end
+end
+
 function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
-    z = zeros(model.nz)
-    v = zeros(model.nv)
-
     if z0 !== nothing && v0 !== nothing
-        z = z0
-        v = v0
+        copyto!(model.z, z0)
+        copyto!(model.v, v0)
     end
 
-    z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose)
+    copyto!(model.x0, x0)
 
-    if return_all
-        return z, v, z[model.x_inds], z[model.u_inds]
-    end
-    return z[model.x_inds], z[model.u_inds] 
+    primal_dual_alg!(model, tol=tol)
 end
