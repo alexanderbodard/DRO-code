@@ -298,8 +298,11 @@ function prox_g!(
     # Result is stored in vv_workspace
     projection!(model)
     
-    LA.BLAS.axpy!(-sigma, model.vv_workspace, arg)
-    copyto!(model.vbar, arg)
+    # LA.BLAS.axpy!(-sigma, model.vv_workspace, arg)
+    # copyto!(model.vbar, arg)
+    @simd for i = 1:model.nv
+        @inbounds @fastmath model.vbar[i] = arg[i] - sigma * model.vv_workspace[i]
+    end
 end
 
 function update_zvbar!(
@@ -310,17 +313,29 @@ function update_zvbar!(
     ### Compute zbar
     copyto!(model.z_workspace, model.z)
     # z_workspace = -gamma * L' * v + z_workspace
-    # LA.BLAS.gemv!('T', -gamma, model.L, model.v, 1., model.z_workspace)
     LA.mul!(model.z_workspace, model.L', model.v, -gamma, 1.)
+
+    # model.z_workspace[1:end] = model.L' * model.v
+    # @simd for i = 1:model.nz
+    #     @inbounds @fastmath model.z_workspace[i] = -gamma * model.z_workspace[i] + model.z[i]
+    # end
+
     prox_f!(model, model.z_workspace , gamma)
 
     ### Compute vbar
     copyto!(model.z_workspace, model.z)
     # z_workspace = 2 * zbar - z_workspace
     LA.BLAS.axpby!(2., model.zbar, -1., model.z_workspace)
+
     copyto!(model.v_workspace, model.v)
     # v_workspace = sigma * L * z_workspace + v_workspace
     LA.mul!(model.v_workspace, model.L, model.z_workspace, sigma, 1.)
+
+    # model.v_workspace[1:end] = model.L * model.z_workspace
+    # @simd for i = 1:model.nv
+    #     @inbounds @fastmath model.v_workspace[i] = sigma * model.v_workspace[i] + model.v[i]
+    # end
+
     prox_g!(model, model.v_workspace, sigma)
 end
 
@@ -354,11 +369,17 @@ function update_zv!(
 )
     ### Update z
     # z = lambda * zbar + (1 - lambda) * z
-    LA.BLAS.axpby!(lambda, model.zbar, 1 - lambda, model.z)
+    # LA.BLAS.axpby!(lambda, model.zbar, 1 - lambda, model.z)
+    @simd for i = 1:model.nz
+        @inbounds @fastmath model.z[i] = lambda * model.zbar[i] + (1 - lambda) * model.z[i]
+    end
 
     ### Update v
     # v = lambda * vbar + (1 - lambda) * v
-    LA.BLAS.axpby!(lambda, model.vbar, 1 - lambda, model.v)
+    # LA.BLAS.axpby!(lambda, model.vbar, 1 - lambda, model.v)
+    @simd for i = 1:model.nv
+        @inbounds @fastmath model.v[i] = lambda * model.vbar[i] + (1 - lambda) * model.v[i]
+    end
 end
 
 function primal_dual_alg!(

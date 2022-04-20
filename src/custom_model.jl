@@ -281,9 +281,22 @@ function prox_f_copy(Q, gamma, x)
     return x ./ (Q .+ 1. / gamma) / gamma
 end
 
+function prox_f!(Q, gamma, x)
+    @simd for i = 1:length(x)
+        @inbounds @fastmath x[i] = x[i] / (Q[i] + 1. / gamma) / gamma
+    end
+    # return x ./ (Q .+ 1. / gamma) / gamma
+end
+
 function psi_copy(Q, gamma, x, s)
     temp = prox_f_copy(Q, gamma, x)
     return 0.5 * sum(Q .* temp.^2) - gamma - s
+end
+
+function psi!(Q, gamma, x, s)
+    # temp = prox_f_copy(Q, gamma, x)
+    prox_f!(Q, gamma, x)
+    return 0.5 * sum(Q .* x.^2) - gamma - s
 end
 
 function bisection_method_copy!(g_lb, g_ub, tol, Q, x, s)
@@ -316,6 +329,19 @@ function epigraph_bisection(Q, x, t)
         return prox_f_copy(Q, gamma_star, x), t + gamma_star #* ( 1 + tol )
     end
     return x, t
+end
+
+function epigraph_bisection!(Q, x, t)
+    f = 0.5 * sum(Q .* (x.^2))
+    if f > t
+        local g_lb = 0 # TODO: How close to zero?
+        local g_ub = f - t #1. TODO: Can be tighter with gamma
+        tol = 1e-12
+        gamma_star = bisection_method_copy!(g_lb, g_ub, tol, Q, x, t)
+        prox_f!(Q, gamma_star, x)
+        t += gamma_star
+    end
+    # return x, t
 end
 
 function epigraph_qcqp(Q, x, t)

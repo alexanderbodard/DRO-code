@@ -90,7 +90,10 @@ module DRO
     # println("x: ", x)
     # println("u: ", u)
 
-    # println(vanilla_model.z)
+    println(vanilla_model.z)
+    # pgfplotsx()
+    # spy(vanilla_model.L)
+    # savefig("saved_output/spy.png")
 
     # writedlm("output/L.dat", vanilla_model.L, '\t')
     # writedlm("output/log_xref.dat", vcat(x_ref, u_ref, s_ref, y_ref), ',')
