@@ -250,30 +250,29 @@ function projection!(
 )
     # 4a
     for ind in model.inds_4a
-        model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), model.vv_workspace[ind], MOI.Nonpositives(2)) # TODO: Fix polar cone
+        model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
     end
 
     # 4b
-    model.vv_workspace[model.inds_4b] = MOD.projection_on_set(MOD.DefaultDistance(), model.vv_workspace[model.inds_4b], MOI.Nonpositives(4)) # TODO: Fix polar cone
+    model.vv_workspace[model.inds_4b] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, model.inds_4b), MOI.Nonpositives(4)) # TODO: Fix polar cone
     
     # 4c
     for (i, ind) in enumerate(model.inds_4c)
         b_bar = model.b_bars[i]
-        dot_p = LA.dot(model.vv_workspace[ind], b_bar)
+        vv = view(model.vv_workspace, ind)
+        dot_p = LA.dot(vv, b_bar)
         if dot_p > 0
-            model.vv_workspace[ind] = model.vv_workspace[ind] - dot_p / LA.dot(b_bar, b_bar) .* b_bar
+            model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) .* b_bar
         end
     end
 
     # 4d: Compute projection
     for (scen_ind, ind) in enumerate(model.inds_4d)
-        z_temp = model.vv_workspace[ind]
-        s = model.vv_workspace[ind[end] + 1]
-
-        model.vv_workspace[ind], model.vv_workspace[ind[end] + 1] = epigraph_bisection(model.Q_bars[scen_ind], z_temp, s)
-
-        # ppp, sss = epigraph_qcqp(LA.diagm(model.Q_bars[scen_ind]), z_temp, s)
-        # z[ind], z[ind[end] + 1] = ppp, sss
+        model.vv_workspace[ind[end] + 1] = epigraph_bisection!(
+            model.Q_bars[scen_ind], 
+            view(model.vv_workspace, ind), 
+            model.vv_workspace[ind[end] + 1]
+        )
     end
 
     # 4e: Dynamics

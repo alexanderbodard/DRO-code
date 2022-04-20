@@ -90,7 +90,7 @@ module DRO
     # println("x: ", x)
     # println("u: ", u)
 
-    println(vanilla_model.z)
+    # println(vanilla_model.z)
     # pgfplotsx()
     # spy(vanilla_model.L)
     # savefig("saved_output/spy.png")

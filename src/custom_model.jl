@@ -285,7 +285,6 @@ function prox_f!(Q, gamma, x)
     @simd for i = 1:length(x)
         @inbounds @fastmath x[i] = x[i] / (Q[i] + 1. / gamma) / gamma
     end
-    # return x ./ (Q .+ 1. / gamma) / gamma
 end
 
 function psi_copy(Q, gamma, x, s)
@@ -294,9 +293,12 @@ function psi_copy(Q, gamma, x, s)
 end
 
 function psi!(Q, gamma, x, s)
-    # temp = prox_f_copy(Q, gamma, x)
     prox_f!(Q, gamma, x)
-    return 0.5 * sum(Q .* x.^2) - gamma - s
+    res = 0
+    @simd for i = 1:length(x)
+        @inbounds @fastmath res += Q[i] * x[i]^2
+    end
+    return 0.5 * res - gamma - s
 end
 
 function bisection_method_copy!(g_lb, g_ub, tol, Q, x, s)
@@ -314,6 +316,32 @@ function bisection_method_copy!(g_lb, g_ub, tol, Q, x, s)
         g_new = (g_lb + g_ub) / 2
         ps = psi_copy(Q, g_new, x, s)
     end
+    return g_new
+end
+
+"""
+x must not be changed when returning!
+TODO: Does this function actually change some arguments?
+"""
+function bisection_method!(g_lb, g_ub, tol, Q, x, s)
+    g_new = (g_lb + g_ub) / 2
+    xcopy = copy(x)
+    ps = psi!(Q, g_new, x, s)
+    while abs(g_ub - g_lb) > tol
+        if sign(ps) > 0
+            g_lb = g_new
+        elseif sign(ps) < 0
+            g_ub = g_new
+        else
+            copyto!(x, xcopy)
+            return g_new
+            error("Should not happen")
+        end
+        g_new = (g_lb + g_ub) / 2
+        copyto!(x, xcopy)
+        ps = psi!(Q, g_new, x, s)
+    end
+    copyto!(x, xcopy)
     return g_new
 end
 
@@ -337,11 +365,11 @@ function epigraph_bisection!(Q, x, t)
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
         tol = 1e-12
-        gamma_star = bisection_method_copy!(g_lb, g_ub, tol, Q, x, t)
+        gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t)
         prox_f!(Q, gamma_star, x)
-        t += gamma_star
+        return t + gamma_star
     end
-    # return x, t
+    return t
 end
 
 function epigraph_qcqp(Q, x, t)
