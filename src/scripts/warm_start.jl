@@ -1,4 +1,4 @@
-using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile
+using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, BenchmarkTools
 
 include("../scenario_tree.jl")
 include("../risk_constraints.jl")
@@ -140,7 +140,7 @@ function get_sub_vector(z, i, nx, nu, scen_tree)
 end
 
 ######################
-N = 4
+N = 3
 supermann_model_2, scen_tree_2 = build_model_n(N-1, true)
 supermann_model_3, scen_tree_3 = build_model_n(N, true)
 d = 2; nx = 2; nu = 1
@@ -150,8 +150,9 @@ PLOT = false
 # Solve the optimization problem
 ###
 
-_, _ = solve_model(supermann_model_3, [2., 2.])
-@time solve_model(supermann_model_3, [2., 2.])
+z, v, _, _ = solve_model(supermann_model_3, [2., 2.], return_all=true)
+z00 = zeros(length(z)); v00 = zeros(length(v))
+@time solve_model(supermann_model_3, [2., 2.], z0=copy(z00), v0=copy(v00), tol=1e-5)
 z, v, x, u = solve_model(supermann_model_3, [2., 2.], return_all = true)
 x0 = x[nx + 1 : 2 * nx]
 
@@ -164,8 +165,12 @@ if PLOT
     plot_scen_tree_x(scen_tree_3, z0[1:length(x)], "output/x_warmup")
 end
 
-@time solve_model(supermann_model_3, x0, z0 = copy(z0), v0=copy(v0))
-@time solve_model(supermann_model_3, x0, z0 = copy(z0), v0=copy(v0))
-@time solve_model(supermann_model_3, x0, z0 = copy(z0), v0=copy(v0))
+# z0 = zeros(length(z))
+# z0[1:nx] = x0
+# @btime solve_model(supermann_model_3, x0, z0 = copy(z0), v0=copy(v0), tol=1e-5)
+# @btime solve_model(supermann_model_3, x0, z0 = copy(z0), v0=copy(v0), tol=1e-5)
+@time solve_model(supermann_model_3, x0, z0 = copy(z0), v0=copy(v0), tol=1e-5)
+
+# @btime solve_model(supermann_model_3, [2., 2.], z0=copy(z00), v0=copy(v00), tol=1e-5)
 
 println("-----------")

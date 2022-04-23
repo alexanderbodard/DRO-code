@@ -21,6 +21,8 @@ module DRO
     import MathOptSetDistances as MOD
     import LinearAlgebra as LA
 
+    Random.seed!(1234)
+
     ##########################
     # Mosek reference implementation
     ##########################
@@ -30,7 +32,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 3; d = 2; nx = 2; nu = 1
+    N = 5; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model

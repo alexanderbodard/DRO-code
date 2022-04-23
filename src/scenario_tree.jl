@@ -141,7 +141,7 @@ function plot_scen_tree_x_i(scen_tree :: ScenarioTree, x :: Vector{Float64}, i :
     end
     
     scatter(xs, ys, fmt=:png, xlim = (0.6, length(scen_tree.min_index_per_timestep) + 2.2), ylim = (-1.1, 1.1), marker = (10, 0.2, :orange), series_annotations = text.(1:7), label="")
-    annotate!(collect(zip(xs .+ 0.1, ys, map(data -> (data[i], 16, :left), collect(eachrow(reshape(x, scen_tree.n_x, 7)'))))))
+    # annotate!(collect(zip(xs .+ 0.1, ys, map(data -> (data[i], 16, :left), collect(eachrow(reshape(x, scen_tree.n_x, 7)'))))))
     filename = string(filename, ".png")
     savefig(filename)
 end

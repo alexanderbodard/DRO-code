@@ -262,7 +262,7 @@ function projection!(
         vv = view(model.vv_workspace, ind)
         dot_p = LA.dot(vv, b_bar)
         if dot_p > 0
-            model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) .* b_bar
+            model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) * b_bar
         end
     end
 
@@ -276,7 +276,9 @@ function projection!(
     end
 
     # 4e: Dynamics
-    model.vv_workspace[model.inds_4e] = zeros(length(model.inds_4e))
+    @simd for ind in model.inds_4e
+        @inbounds @fastmath model.vv_workspace[ind] = 0.
+    end
 
     # Initial condition
     model.vv_workspace[end - length(model.x0) + 1 : end] = model.x0

@@ -439,7 +439,7 @@ function primal_dual_alg(
             log_tau[counter+1] = tau
         end
 
-        if r_norm < tol && false
+        if r_norm < tol
             println("Breaking!", counter)
             break
         end

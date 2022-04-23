@@ -281,6 +281,12 @@ function prox_f_copy(Q, gamma, x)
     return x ./ (Q .+ 1. / gamma) / gamma
 end
 
+function prox_f!(Q, gamma, x, output)
+    @simd for i = 1:length(x)
+        @inbounds @fastmath output[i] = x[i] / (Q[i] + 1. / gamma) / gamma
+    end
+end
+
 function prox_f!(Q, gamma, x)
     @simd for i = 1:length(x)
         @inbounds @fastmath x[i] = x[i] / (Q[i] + 1. / gamma) / gamma
@@ -297,6 +303,15 @@ function psi!(Q, gamma, x, s)
     res = 0
     @simd for i = 1:length(x)
         @inbounds @fastmath res += Q[i] * x[i]^2
+    end
+    return 0.5 * res - gamma - s
+end
+
+function psi!(Q, gamma, x, s, workspace)
+    prox_f!(Q, gamma, x, workspace)
+    res = 0
+    @simd for i = 1:length(x)
+        @inbounds @fastmath res += Q[i] * workspace[i]^2
     end
     return 0.5 * res - gamma - s
 end
@@ -326,22 +341,22 @@ TODO: Does this function actually change some arguments?
 function bisection_method!(g_lb, g_ub, tol, Q, x, s)
     g_new = (g_lb + g_ub) / 2
     xcopy = copy(x)
-    ps = psi!(Q, g_new, x, s)
+    ps = psi!(Q, g_new, x, s, xcopy)
     while abs(g_ub - g_lb) > tol
         if sign(ps) > 0
             g_lb = g_new
         elseif sign(ps) < 0
             g_ub = g_new
         else
-            copyto!(x, xcopy)
+            # copyto!(x, xcopy)
             return g_new
             error("Should not happen")
         end
         g_new = (g_lb + g_ub) / 2
-        copyto!(x, xcopy)
-        ps = psi!(Q, g_new, x, s)
+        # copyto!(x, xcopy)
+        ps = psi!(Q, g_new, x, s, xcopy)
     end
-    copyto!(x, xcopy)
+    # copyto!(x, xcopy)
     return g_new
 end
 
