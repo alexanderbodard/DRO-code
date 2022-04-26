@@ -3,7 +3,7 @@ module DRO
     ###
     # Problem definition
     ###
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools
 
     include("scenario_tree.jl")
     include("risk_constraints.jl")
@@ -74,7 +74,7 @@ module DRO
 
     reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
     vanilla_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
-    supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
+    # supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
 
     ###
     # Solve the optimization problem

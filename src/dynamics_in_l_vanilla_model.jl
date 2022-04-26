@@ -61,7 +61,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     ####
     R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
     T = length(scen_tree.min_index_per_timestep)
-    Q_bars = []
+    Q_bars = Vector{Float64}[]
     Q_bars_old = []
     # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
     for scen_ind = 1:length(scenarios)
@@ -270,7 +270,7 @@ function projection!(
     # 4d: Compute projection
     for (scen_ind, ind) in enumerate(model.inds_4d)
         model.vv_workspace[ind[end] + 1] = epigraph_bisection!(
-            model.Q_bars[scen_ind], 
+            view(model.Q_bars, scen_ind),
             view(model.vv_workspace, ind), 
             model.vv_workspace[ind[end] + 1],
             view(model.vvv_workspace, ind)
@@ -343,14 +343,23 @@ function update_zvbar!(
 end
 
 function get_rnorm(
-    model :: DYNAMICS_IN_L_VANILLA_MODEL
+    model :: DYNAMICS_IN_L_VANILLA_MODEL,
+    gamma :: Float64,
+    sigma :: Float64
 )
-    # TODO: Implement this
-    return NaN
+    # TODO: Implement this properly
+    return sqrt(
+        LA.dot(model.rz, model.rz) / gamma 
+        + LA.dot(model.rv, model.rv) / sigma
+        - LA.dot(model.L * model.rz, model.rv) 
+        - LA.dot(model.rv, model.L * model.rz)
+    )
 end
 
 function update_residual!(
-    model :: DYNAMICS_IN_L_VANILLA_MODEL
+    model :: DYNAMICS_IN_L_VANILLA_MODEL,
+    gamma :: Float64,
+    sigma :: Float64
 )
     ### Update model.rz
     copyto!(model.rz, model.z)
@@ -363,7 +372,7 @@ function update_residual!(
     LA.BLAS.axpy!(-1., model.vbar, model.rv)
 
     ### Update model.rnorm
-    return get_rnorm(model)
+    return get_rnorm(model, gamma, sigma)
 end
 
 function update_zv!(
@@ -400,7 +409,7 @@ function primal_dual_alg!(
 
     while iter < MAX_ITER_COUNT
         update_zvbar!(model, gamma, sigma)
-        rnorm = update_residual!(model)
+        rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
 
         if rnorm < tol
