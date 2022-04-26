@@ -360,6 +360,25 @@ function bisection_method!(g_lb, g_ub, tol, Q, x, s)
     return g_new
 end
 
+function bisection_method!(g_lb, g_ub, tol, Q, x, s, workspace)
+    g_new = (g_lb + g_ub) / 2
+    copyto!(workspace, x)
+    ps = psi!(Q, g_new, x, s, workspace)
+    while abs(g_ub - g_lb) > tol
+        if sign(ps) > 0
+            g_lb = g_new
+        elseif sign(ps) < 0
+            g_ub = g_new
+        else
+            return g_new
+            error("Should not happen")
+        end
+        g_new = (g_lb + g_ub) / 2
+        ps = psi!(Q, g_new, x, s, workspace)
+    end
+    return g_new
+end
+
 function epigraph_bisection(Q, x, t)
     f = 0.5 * sum(Q .* (x.^2))
     if f > t
@@ -381,6 +400,24 @@ function epigraph_bisection!(Q, x, t)
         local g_ub = f - t #1. TODO: Can be tighter with gamma
         tol = 1e-12
         gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t)
+        prox_f!(Q, gamma_star, x)
+        return t + gamma_star
+    end
+    return t
+end
+
+function epigraph_bisection!(Q, x, t, workspace)
+    f = 0
+    @simd for i = 1:length(x)
+        @inbounds @fastmath f += Q[i] * x[i]^2 
+    end
+    f *= 0.5
+    # f = 0.5 * sum(Q .* (x.^2))
+    if f > t
+        local g_lb = 0 # TODO: How close to zero?
+        local g_ub = f - t #1. TODO: Can be tighter with gamma
+        tol = 1e-12
+        gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t, workspace)
         prox_f!(Q, gamma_star, x)
         return t + gamma_star
     end

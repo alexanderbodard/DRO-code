@@ -47,6 +47,7 @@ struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
     z_workspace :: Vector{Float64}
     v_workspace :: Vector{Float64}
     vv_workspace :: Vector{Float64}
+    vvv_workspace :: Vector{Float64}
     z :: Vector{Float64}
     v :: Vector{Float64}
     rz :: Vector{Float64}

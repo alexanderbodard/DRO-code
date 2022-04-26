@@ -140,6 +140,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         zeros(n_z),
         zeros(n_L),
         zeros(n_L),
+        zeros(n_L),
         zeros(n_z),
         zeros(n_L),
         zeros(n_z),
@@ -271,7 +272,8 @@ function projection!(
         model.vv_workspace[ind[end] + 1] = epigraph_bisection!(
             model.Q_bars[scen_ind], 
             view(model.vv_workspace, ind), 
-            model.vv_workspace[ind[end] + 1]
+            model.vv_workspace[ind[end] + 1],
+            view(model.vvv_workspace, ind)
         )
     end
 
