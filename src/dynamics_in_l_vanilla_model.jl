@@ -61,7 +61,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     ####
     R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
     T = length(scen_tree.min_index_per_timestep)
-    Q_bars = Vector{Float64}[]
+    Q_bars = Float64[]
     Q_bars_old = []
     # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
     for scen_ind = 1:length(scenarios)
@@ -97,7 +97,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         )])
     end
     for i = 1:length(Q_bars_old)
-        append!(Q_bars, [[Q_bars_old[i][j, j] for j = 1:size(Q_bars_old[i])[1]]])
+        append!(Q_bars, [Q_bars_old[i][j, j] for j = 1:size(Q_bars_old[i])[1]])
     end
 
     # Compute projection
@@ -147,7 +147,8 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         zeros(n_L),
         zeros(n_z),
         zeros(n_L),
-        zeros(scen_tree.n_x)
+        zeros(scen_tree.n_x),
+        length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
     )
 end
 
@@ -162,6 +163,20 @@ function prox_f!(
 )
     copyto!(model.zbar, arg)
     model.zbar[model.s_inds[1]] -= gamma    
+end
+
+function cost_projection!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)# Q, vector that contains (among other) x | t, workspace
+    # Threads.@threads for (scen_ind, ind) in collect(enumerate(inds_4d))
+    for (scen_ind, ind) in enumerate(inds_4d)
+        vv_workspace[ind[end] + 1] = epigraph_bisection!(
+            view(Q_bars, (scen_ind - 1) * nQ + 1 : scen_ind * nQ ),
+            view(vv_workspace, ind), 
+            vv_workspace[ind[end] + 1],
+            view(vvv_workspace, ind)
+        )
+    end
+
+    nothing
 end
 
 function projection!(
@@ -185,16 +200,8 @@ function projection!(
         end
     end
 
-    # 4d: Compute projection
-    # Threads.@threads for (scen_ind, ind) in collect(enumerate(model.inds_4d))
-    for (scen_ind, ind) in enumerate(model.inds_4d)
-        model.vv_workspace[ind[end] + 1] = epigraph_bisection!(
-            view(model.Q_bars, scen_ind),
-            view(model.vv_workspace, ind), 
-            model.vv_workspace[ind[end] + 1],
-            view(model.vvv_workspace, ind)
-        )
-    end
+    # 4d: Compute cost projection
+    cost_projection!(model.Q_bars, model.vv_workspace, model.vvv_workspace, model.inds_4d, model.nQ)
 
     # 4e: Dynamics
     @simd for ind in model.inds_4e

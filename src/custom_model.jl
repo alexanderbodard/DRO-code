@@ -283,13 +283,13 @@ end
 
 function prox_f!(Q, gamma, x, output)
     @simd for i = 1:length(x)
-        @inbounds @fastmath output[i] = x[i] / (Q[1][i] + 1. / gamma) / gamma
+        @inbounds @fastmath output[i] = x[i] / (Q[i] + 1. / gamma) / gamma
     end
 end
 
 function prox_f!(Q, gamma, x)
     @simd for i = 1:length(x)
-        @inbounds @fastmath x[i] = x[i] / (Q[1][i] + 1. / gamma) / gamma
+        @inbounds @fastmath x[i] = x[i] / (Q[i] + 1. / gamma) / gamma
     end
 end
 
@@ -311,7 +311,7 @@ function psi!(Q, gamma, x, s, workspace)
     prox_f!(Q, gamma, x, workspace)
     res = 0
     @simd for i = 1:length(x)
-        @inbounds @fastmath res += Q[1][i] * workspace[i]^2
+        @inbounds @fastmath res += Q[i] * workspace[i]^2
     end
     return 0.5 * res - gamma - s
 end
@@ -409,7 +409,7 @@ end
 function epigraph_bisection!(Q, x, t, workspace)
     f = 0
     @simd for i = 1:length(x)
-        @inbounds @fastmath f += Q[1][i] * x[i]^2 
+        @inbounds @fastmath f += Q[i] * x[i]^2 
     end
     f *= 0.5
     # f = 0.5 * sum(Q .* (x.^2))
