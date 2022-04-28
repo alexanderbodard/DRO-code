@@ -155,88 +155,6 @@ end
 # Solve stage
 ############################################################
 
-function primal_dual_alg(
-    x, 
-    v, 
-    model :: DYNAMICS_IN_L_VANILLA_MODEL, 
-    x0 :: Vector{Float64}; 
-    DEBUG :: Bool = false, 
-    tol :: Float64 = 1e-12, 
-    MAX_ITER_COUNT :: Int64 = 20000,
-)
-    # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
-    lambda = 0.5
-    sigma = 0.99 / sqrt(model.L_norm)
-    gamma = sigma
-
-    if DEBUG
-        n_z = length(x)
-        log_x = zeros(MAX_ITER_COUNT, n_z)
-        log_v = zeros(MAX_ITER_COUNT, length(v))
-        nx = length(model.x_inds)
-        nu = length(model.u_inds)
-        ns = length(model.s_inds)
-        ny = length(model.y_inds)
-        xinit = copy(x[1:nx])
-        log_residuals = zeros(MAX_ITER_COUNT)
-
-        P = [[1/gamma * LA.I(length(x)) -model.L']; [-model.L 1/sigma * LA.I(length(v))]]
-    end
-
-    # TODO: Work with some tolerance
-    counter = 0
-    while counter < MAX_ITER_COUNT
-
-        # Compute xbar
-        copyto!(model.v_workspace, v)
-        for i = 1:length(v)
-            model.v_workspace[i] *= gamma
-        end
-        xbar = x - L_mult(model, model.v_workspace, true) - Gamma_grad_mult(model, x, gamma)
-
-        # Compute vbar
-        for i = 1:length(x)
-            model.x_workspace[i] = sigma * (2 * xbar[i] - x[i])
-        end
-
-        vbar = prox_hstar(model, x0, v + L_mult(model, model.x_workspace), sigma)
-
-        # Compute the residual
-        r_x = x - xbar
-        r_v = v - vbar
-        r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
-
-        # Update x by averaging step
-        x = lambda * xbar + (1 - lambda) * x
-
-        # Update v by averaging step
-        for i = 1:length(v)
-            v[i] *= (1 - lambda)
-            v[i] += lambda * vbar[i]
-        end
-
-        if DEBUG
-            log_x[counter + 1, 1:end] = x
-            log_v[counter + 1, 1:end] = v
-            log_residuals[counter + 1] = r_norm
-        end
-
-        if r_norm / sqrt(LA.norm(x)^2 + LA.norm(v)^2) < tol && false
-            println("Breaking!", counter)
-            break
-        end
-        counter += 1
-    end
-
-    if DEBUG
-        writedlm("output/log_vanilla_x.dat", log_x[1:counter, 1:end], ',')
-        writedlm("output/log_vanilla_v.dat", log_v[1:counter, 1:end], ',')
-        writedlm("output/log_vanilla_residual.dat", log_residuals[1:counter], ',') 
-    end
-
-    return x
-end
-
 function prox_f!(
     model :: DYNAMICS_IN_L_VANILLA_MODEL,
     arg :: Vector{Float64},
@@ -268,6 +186,7 @@ function projection!(
     end
 
     # 4d: Compute projection
+    # Threads.@threads for (scen_ind, ind) in collect(enumerate(model.inds_4d))
     for (scen_ind, ind) in enumerate(model.inds_4d)
         model.vv_workspace[ind[end] + 1] = epigraph_bisection!(
             view(model.Q_bars, scen_ind),
@@ -412,7 +331,7 @@ function primal_dual_alg!(
         rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
 
-        if rnorm < tol
+        if rnorm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(model.v)^2)
             println("Breaking!", iter)
             break
         end

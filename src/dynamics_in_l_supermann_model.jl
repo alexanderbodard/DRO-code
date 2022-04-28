@@ -60,7 +60,7 @@ function build_dynamics_in_l_supermann_model(scen_tree :: ScenarioTree, cost :: 
     ####
     R_offset = length(scen_tree.min_index_per_timestep) * scen_tree.n_x
     T = length(scen_tree.min_index_per_timestep)
-    Q_bars = []
+    Q_bars = Vector{Float64}[]
     Q_bars_old = []
     # Q_bar is a block diagonal matrix with the corresponding Q's and R's for that scenario
     for scen_ind = 1:length(scenarios)
@@ -137,7 +137,16 @@ function build_dynamics_in_l_supermann_model(scen_tree :: ScenarioTree, cost :: 
             (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
         ),
         zeros(n_z),
-        zeros(n_L)
+        zeros(n_L),
+        zeros(n_L),
+        zeros(n_L),
+        zeros(n_z),
+        zeros(n_L),
+        zeros(n_z),
+        zeros(n_L),
+        zeros(n_z),
+        zeros(n_L),
+        zeros(scen_tree.n_x)
     )
 end
 
@@ -253,11 +262,8 @@ function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_
     return d, k
 end
 
-function primal_dual_alg(
-    x, 
-    v, 
-    model :: DYNAMICS_IN_L_SUPERMANN_MODEL, 
-    x0 :: Vector{Float64}; 
+function primal_dual_alg!(
+    model :: DYNAMICS_IN_L_SUPERMANN_MODEL;
     DEBUG :: Bool = false, 
     tol :: Float64 = 1e-12, 
     MAX_ITER_COUNT :: Int64 = 20000,
@@ -280,6 +286,10 @@ function primal_dual_alg(
     r_safe = Inf  # Correct initial value is set during first iteration
     eta = r_safe
     broyden_k = 0
+
+    x = model.z
+    v = model.v
+    x0 = model.x0
 
     wx = zeros(length(x))
     wv = zeros(length(v))
@@ -334,10 +344,10 @@ function primal_dual_alg(
 
         # Compute vbar
         for i = 1:length(x)
-            model.x_workspace[i] = sigma * (2 * xbar[i] - x[i])
+            model.z_workspace[i] = sigma * (2 * xbar[i] - x[i])
         end
 
-        vbar = prox_hstar(model, x0, v + L_mult(model, model.x_workspace), sigma)
+        vbar = prox_hstar(model, x0, v + L_mult(model, model.z_workspace), sigma)
 
         # Compute the residual
         r_x = x - xbar
@@ -446,30 +456,16 @@ function primal_dual_alg(
         counter += 1
     end
 
-    if DEBUG
-        println("Writing outputs")
-        writedlm("output/log_supermann_x.dat", log_x[1:counter, 1:end], ',')
-        writedlm("output/log_supermann_v.dat", log_v[1:counter, 1:end], ',')
-        writedlm("output/log_supermann_residual.dat", log_residuals[1:counter], ',') 
-        writedlm("output/log_supermann_tau.dat", log_tau[1:counter], ',') 
-    end
-
-    return x
+    println(x)
 end
 
 function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
-    z = zeros(model.nz)
-    v = zeros(model.nv)
-
     if z0 !== nothing && v0 !== nothing
-        z = z0
-        v = v0
+        copyto!(model.z, z0)
+        copyto!(model.v, v0)
     end
 
-    z = primal_dual_alg(z, v, model, x0, tol=tol, DEBUG=verbose)
+    copyto!(model.x0, x0)
 
-    if return_all
-        return z, v, z[model.x_inds], z[model.u_inds]
-    end
-    return z[model.x_inds], z[model.u_inds] 
+    primal_dual_alg!(model, tol=tol)
 end

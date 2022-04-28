@@ -74,11 +74,20 @@ struct DYNAMICS_IN_L_SUPERMANN_MODEL{T} <: CUSTOM_SOLVER_MODEL
     inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
     b_bars :: Vector{Vector{Float64}}
     inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
-    Q_bars :: Vector{Any}
+    Q_bars :: Vector{Vector{Float64}}
     inds_4e :: UnitRange{Int64}
     workspace_vec :: Vector{Float64}
-    x_workspace :: Vector{Float64}
+    z_workspace :: Vector{Float64}
     v_workspace :: Vector{Float64}
+    vv_workspace :: Vector{Float64}
+    vvv_workspace :: Vector{Float64}
+    z :: Vector{Float64}
+    v :: Vector{Float64}
+    rz :: Vector{Float64}
+    rv :: Vector{Float64}
+    zbar :: Vector{Float64}
+    vbar :: Vector{Float64}
+    x0 :: Vector{Float64}
 end
 
 # Union type for all models with dynamics in L

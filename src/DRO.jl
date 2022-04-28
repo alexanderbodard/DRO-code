@@ -32,7 +32,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 7; d = 2; nx = 2; nu = 1
+    N = 5; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
@@ -74,7 +74,7 @@ module DRO
 
     reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
     vanilla_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
-    # supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
+    supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
 
     ###
     # Solve the optimization problem
@@ -85,14 +85,14 @@ module DRO
 
     # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
     # @time solve_model(vanilla_model, [2., 2.], verbose=false)
-    @time solve_model(vanilla_model, [2., 2.], verbose=false)
-    @time solve_model(vanilla_model, [2., 2.], verbose=false)
-    # @time solve_model(supermann_model, [2., 2.], verbose=false)
-    # @time solve_model(supermann_model, [2., 2.], verbose=false)
+    @time solve_model(vanilla_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
+    @time solve_model(vanilla_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
+    # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
+    # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
     # println("x: ", x)
     # println("u: ", u)
 
-    # println(vanilla_model.z)
+    # println(supermann_model.z)
     # pgfplotsx()
     # spy(vanilla_model.L)
     # savefig("saved_output/spy.png")
