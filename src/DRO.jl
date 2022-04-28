@@ -3,7 +3,7 @@ module DRO
     ###
     # Problem definition
     ###
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools#, CUDA
 
     include("scenario_tree.jl")
     include("risk_constraints.jl")
@@ -82,7 +82,7 @@ module DRO
 
     # @time solve_model(reference_model, [2., 2.])
     x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
-    # println(x_ref)
+    println(x_ref)
 
     # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
     # @time solve_model(vanilla_model, [2., 2.], verbose=false)
@@ -93,7 +93,7 @@ module DRO
     # println("x: ", x)
     # println("u: ", u)
 
-    # println(vanilla_model.z)
+    println(vanilla_model.z)
     # println(vanilla_model.Q_bars)
     # pgfplotsx()
     # spy(vanilla_model.L)

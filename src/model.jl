@@ -40,7 +40,7 @@ struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
     inds_4b :: UnitRange{Int64}
     inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
     b_bars :: Vector{Vector{Float64}}
-    inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
+    inds_4d :: Vector{Int64}
     Q_bars :: Vector{Float64}
     inds_4e :: UnitRange{Int64}
     workspace_vec :: Vector{Float64}

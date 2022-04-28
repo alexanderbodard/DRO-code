@@ -101,11 +101,11 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     end
 
     # Compute projection
-    inds_4d = Union{UnitRange{Int64}, Int64}[]
+    inds_4d = Int64[]
     for scen_ind  = 1:length(scenarios)
         n_z_part = length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
         ind = offset + 1 : offset + n_z_part
-        append!(inds_4d, [ind])
+        append!(inds_4d, collect(ind))
 
         offset += (n_z_part + 1)
     end
@@ -167,12 +167,30 @@ end
 
 function cost_projection!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)# Q, vector that contains (among other) x | t, workspace
     # Threads.@threads for (scen_ind, ind) in collect(enumerate(inds_4d))
-    for (scen_ind, ind) in enumerate(inds_4d)
+    # for (scen_ind, ind) in enumerate(inds_4d)
+    for scen_ind = 1:length(inds_4d) ÷ nQ
+        ind = inds_4d[(scen_ind - 1) * nQ + 1 : scen_ind * nQ]
         vv_workspace[ind[end] + 1] = epigraph_bisection!(
             view(Q_bars, (scen_ind - 1) * nQ + 1 : scen_ind * nQ ),
             view(vv_workspace, ind), 
             vv_workspace[ind[end] + 1],
             view(vvv_workspace, ind)
+        )
+    end
+
+    nothing
+end
+
+function cost_projection_cuda!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)# Q, vector that contains (among other) x | t, workspace
+    for scen_ind = 1:length(inds_4d) ÷ nQ # for each scenario
+        epigraph_bisection!(
+            Q_bars,
+            vv_workspace, 
+            vv_workspace[inds_4d[scen_ind * nQ] + 1],
+            vvv_workspace,
+            inds_4d,
+            scen_ind,
+            nQ
         )
     end
 
@@ -201,7 +219,19 @@ function projection!(
     end
 
     # 4d: Compute cost projection
-    cost_projection!(model.Q_bars, model.vv_workspace, model.vvv_workspace, model.inds_4d, model.nQ)
+    cost_projection_cuda!(model.Q_bars, model.vv_workspace, model.vvv_workspace, model.inds_4d, model.nQ)
+    # Q_bars = CuArray(model.Q_bars)
+    # vv_workspace = CuArray(model.vv_workspace)
+    # vvv_workspace = CuArray(model.vvv_workspace)
+    # inds_4d = CuArray(model.inds_4d)
+    # nQ = model.nQ
+
+    # scen_ind = 2
+    # ind = inds_4d[(scen_ind - 1) * nQ + 1 : scen_ind * nQ]
+    
+    # CUDA.@sync begin
+    # 	@cuda threads=1 cost_projection!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)
+    # end
 
     # 4e: Dynamics
     @simd for ind in model.inds_4e
