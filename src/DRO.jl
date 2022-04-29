@@ -3,7 +3,7 @@ module DRO
     ###
     # Problem definition
     ###
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools#, CUDA
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools, CUDA
 
     include("scenario_tree.jl")
     include("risk_constraints.jl")
