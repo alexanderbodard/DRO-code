@@ -41,7 +41,7 @@ module DRO
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
-    T_s = 0.05
+    T_s = 0.5
     A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
     B = [reshape([0., T_s], :, 1) for _ in 1:d]
     dynamics = get_uniform_dynamics(A, B)
@@ -56,15 +56,10 @@ module DRO
     Risk neutral: A = I, B = [I; -I], b = [0.5;0.5;-0.5;-0.5]
     AVaR: A = I, B = [-I, I, 1^T, -1^T], b = [0; p / alpha; 1, -1]
     """
-    rms = get_uniform_rms(
-      LA.I(2),
-      [LA.I(2); -LA.I(2)],
-      [0.5 , 0.5, -0.5, -0.5],
-      ConvexCone([MOI.Nonnegatives(2)]),
-      ConvexCone([MOI.Nonnegatives(4)]),
-      d,
-      N
-    )
+    rms = get_uniform_rms_robust(d, N)
+
+    p_ref = [0.5, 0.5]; alpha=1.
+    rms = get_uniform_rms_avar(p_ref, alpha, d, N)
 
     ###
     # Formulate the optimization problem
@@ -80,7 +75,7 @@ module DRO
 
     # @time solve_model(reference_model, [2., 2.])
     x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
-    #println(x_ref)
+    println(x_ref, s_ref)
 
     # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
     # @time solve_model(vanilla_model, [2., 2.], verbose=false)
@@ -91,7 +86,7 @@ module DRO
     # println("x: ", x)
     # println("u: ", u)
 
-    println(vanilla_model.z)
+    # println(vanilla_model.z)
     # println(vanilla_model.Q_bars)
     # pgfplotsx()
     # spy(vanilla_model.L)

@@ -59,6 +59,44 @@ function get_uniform_rms(A, B, b, C, D, d, N)
     ]
 end
 
-function get_uniform_rms_risk_neutral()
-  # Todo
+"""
+Returns rms for a constant branching factor d and all risk mappings defined as risk robust.
+
+A = I_d
+B = [1_d'; - 1_d']
+b = [1; -1]
+"""
+function get_uniform_rms_robust(d, N)
+  return get_uniform_rms(
+    LA.I(d),
+    vcat([1. for _ in 1:d]', [-1. for _ in 1:d]'),
+    [1.; -1.],
+    ConvexCone([MOI.Nonnegatives(d)]),
+    ConvexCone([MOI.Nonnegatives(2)]),
+    d,
+    N
+  )
+end
+
+"""
+Returns rms for a constant branching factor d and all risk mappings defined as avar.
+
+A = I_d
+B = [I_d; 1_d'; - 1_d']
+b = [p / alpha; 1; -1]
+"""
+function get_uniform_rms_avar(p, alpha, d, N)
+  return get_uniform_rms(
+    LA.I(d),
+    vcat(LA.I(d), [1. for _ in 1:d]', [-1. for _ in 1:d]'),
+    [p / alpha; 1.; -1.],
+    ConvexCone([MOI.Nonnegatives(d)]),
+    ConvexCone([MOI.Nonnegatives(d+2)]),
+    d,
+    N
+  )
+end
+
+function get_uniform_rms_risk_neutral(p, d, N)
+  return get_uniform_rms_avar(p, 1., d, N)
 end
