@@ -27,7 +27,7 @@ const SOLVER_MODEL = Union{MOSEK_MODEL, CUSTOM_SOLVER_MODEL}
 """
 Model in which the problem dynamics Hx = 0 are imposed by including H in the L matrix.
 """
-struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
+struct DYNAMICS_IN_L_VANILLA_MODEL{T, AI, AF} <: CUSTOM_SOLVER_MODEL
     L :: T
     L_norm :: Float64
     nz :: Int64
@@ -40,15 +40,15 @@ struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
     inds_4b :: UnitRange{Int64}
     inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
     b_bars :: Vector{Vector{Float64}}
-    inds_4d :: CuArray{Int64}
-    Q_bars :: CuArray{Float64}
+    inds_4d :: AI
+    Q_bars :: AF
     inds_4e :: UnitRange{Int64}
     workspace_vec :: Vector{Float64}
     z_workspace :: Vector{Float64}
     v_workspace :: Vector{Float64}
     vv_workspace :: Vector{Float64}
-    vv_workspace_cuda :: CuArray{Float64}
-    vvv_workspace :: CuArray{Float64}
+    vv_workspace_cuda :: AF
+    vvv_workspace :: AF
     z :: Vector{Float64}
     v :: Vector{Float64}
     rz :: Vector{Float64}
@@ -147,7 +147,7 @@ function build_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynami
         if solver_options.SuperMann
             return build_dynamics_in_l_supermann_model(scen_tree, cost, dynamics, rms)
         else
-            return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms)
+            return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms, gpu=true)
         end     
     end
     if solver == RICATTI_SOLVER

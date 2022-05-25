@@ -2,7 +2,7 @@
 # Build stage
 ############################################################
 
-function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynamics, rms :: Vector{Riskmeasure})
+function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynamics, rms :: Vector{Riskmeasure}; gpu :: Bool = false)
     eliminate_states = false
     n_z = get_n_z(scen_tree, rms, eliminate_states)
     z = zeros(n_z)
@@ -117,7 +117,43 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     # # Initial condition
     # z[end] = 2.
 
-    return DYNAMICS_IN_L_VANILLA_MODEL(
+    if gpu
+      return DYNAMICS_IN_L_VANILLA_MODEL(
+          L,
+          L_norm,
+          n_z,
+          n_L,
+          z_to_x(scen_tree),
+          z_to_u(scen_tree),
+          z_to_s(scen_tree),
+          z_to_y(scen_tree, 4),
+          inds_4a,
+          inds_4b,
+          inds_4c,
+          b_bars,
+          CuArray(inds_4d),
+          CuArray(Q_bars),
+          inds_4e,
+          zeros(
+              length(scen_tree.min_index_per_timestep) * scen_tree.n_x + 
+              (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
+          ),
+          zeros(n_z),
+          zeros(n_L),
+          Mem.pin(Array{Float64}(undef, n_L)), #zeros(n_L),
+          CuArray(zeros(n_L)),
+          CuArray(zeros(n_L)),
+          zeros(n_z),
+          zeros(n_L),
+          zeros(n_z),
+          zeros(n_L),
+          zeros(n_z),
+          zeros(n_L),
+          zeros(scen_tree.n_x),
+          length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
+      )
+    else
+      return DYNAMICS_IN_L_VANILLA_MODEL(
         L,
         L_norm,
         n_z,
@@ -130,8 +166,8 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         inds_4b,
         inds_4c,
         b_bars,
-        CuArray(inds_4d),
-        CuArray(Q_bars),
+        inds_4d,
+        Q_bars,
         inds_4e,
         zeros(
             length(scen_tree.min_index_per_timestep) * scen_tree.n_x + 
@@ -139,9 +175,9 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         ),
         zeros(n_z),
         zeros(n_L),
-        Mem.pin(Array{Float64}(undef, n_L)), #zeros(n_L),
-        CuArray(zeros(n_L)),
-        CuArray(zeros(n_L)),
+        zeros(n_L),
+        zeros(n_L),
+        zeros(n_L),
         zeros(n_z),
         zeros(n_L),
         zeros(n_z),
@@ -151,6 +187,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         zeros(scen_tree.n_x),
         length(scen_tree.min_index_per_timestep) * scen_tree.n_x + (length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u
     )
+  end
 end
 
 ############################################################
