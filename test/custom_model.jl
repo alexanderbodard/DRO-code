@@ -1,59 +1,78 @@
 using Test
+import LinearAlgebra as LA
 
-include("../src/scenario_tree.jl")
-include("../src/dynamics.jl")
-include("../src/custom_model.jl")
+@testset "p_norm" begin
+    for _ = 1:100
+        nz = 30; nv = 100
+        L = rand(nv, nz); sigma = rand(); gamma = rand();
+        P = [[1/gamma * LA.I(nz) -L']; [-L 1/sigma * LA.I(nv)]]
 
-@testset "Dynamics constraint 4e" begin
-    # Scenario tree
-    node_info = [
-        ScenarioTreeNodeInfo(
-            collect((i - 1) * 2 + 1 : i * 2),
-            i < 4 ? [i] : nothing,
-            i > 1 ? (i % 2) + 1 : nothing,
-            i,
-        ) for i in collect(1:7)
-    ]
+        rz = rand(nz); rv = rand(nv);
 
-    scen_tree = ScenarioTree(
-        Dict(
-            1 => [2, 3], 
-            2 => [4, 5], 
-            3 => [6, 7],
-        ),
-        Dict(
-            2 => 1,
-            3 => 1,
-            4 => 2,
-            5 => 2,
-            6 => 3,
-            7 => 3,
-        ),
-        node_info,
-        2,
-        1,
-        7,
-        3,
-        4,
-        7,
-        [1, 2, 4]
-    )
-
-    # Dynamics: Based on a discretized car model
-    T_s = 0.05
-    n_x = 2
-    n_u = 1
-    d = 2
-    A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
-    B = [reshape([0., T_s], :, 1) for _ in 1:d]
-    dynamics = Dynamics(A, B, n_x, n_u)
-
-    L_II, L_JJ, L_VV = construct_L_4e(scen_tree, dynamics, length(x) + length(u))
-    println(minimum(L_JJ), ", ", maximum(L_JJ))
-    println(L_JJ)
-    H = sparse(L_II, L_JJ, L_VV, (scen_tree.n_x * scen_tree.n - 1), scen_tree.n * scen_tree.n_x + scen_tree.n_non_leaf_nodes * scen_tree.n_u)
-
-
-    @test 5 == 5
-    @test 1 + 2 == 3
+        p_norm_verif = LA.dot(vcat(rz, rv), P * vcat(rz, rv))
+        @test isapprox(p_norm_verif, p_norm(rz, rv, rz, rv, L, gamma, sigma))
+        @test isapprox(p_norm_verif, p_dot(vcat(rz, rv), vcat(rz, rv), P))
+    end
 end
+
+@testset "prox_f and psi" begin
+    Q = LA.Matrix([2.2 0; 0 3.7])
+    Qdiag = [2.2, 3.7]
+
+    for _ = 1:1e3
+        x = rand(2); gamma = rand(); s = rand()
+
+        f = ProximalOperators.Quadratic(Q, zeros(2))
+        p, t = ProximalOperators.prox(f, x, gamma)
+        @test isapprox(prox_f_copy(Qdiag, gamma, x), p)
+        @test isapprox(psi_copy(Qdiag, gamma, x, s), 0.5 * p' * Q * p - gamma - s)
+    end
+end
+
+# @testset "epigraph projection" begin
+#     Q = LA.Matrix([2.2 0; 0 3.7])
+#     Qdiag = [2.2, 3.7]
+
+#     for _ = 1:1e1
+#         x = rand(2); t = rand(); xx = copy(x); tt = copy(t)
+#         p, s = epigraph_qcqp(Q, x, t)
+#         # (p, s) \in epigraph
+#         @test 0.5 * p' * Q * p <= s
+
+#         if 0.5 * x' * Q * x <= t
+#             @test isapprox(x, p)
+#             @test isapprox(t, s)
+#         end
+
+#         pp, ss = epigraph_bisection(Qdiag, x, t)
+#         # (pp, ss) \in epigraph
+#         @test 0.5 * pp' * Q * pp <= ss
+
+#         if 0.5 * x' * Q * x <= t
+#             @test isapprox(x, pp)
+#             @test isapprox(t, ss)
+#         end
+#         if 0.5 * x' * Q * x > t
+#             # When (x, t) is not on the epigraph, the projection must be on the boundary
+#             @test isapprox(0.5 * p' * Q * p, s)
+#             @test isapprox(0.5 * pp' * Q * pp, ss)
+#         end
+
+#         gamma_star = ss - t
+#         if gamma_star > 0
+#             p_test = prox_f_copy(Qdiag, s - t, x)
+#             isapprox(p_test, p)
+#         end
+
+#         # println("x: $(x)")
+#         # @test isapprox(pp, p, rtol=1e-6)
+#         # println("t: $(t)")
+#         # @test isapprox(ss, s, rtol=1e-6)
+
+#         # println("Difference: ", (ss - s) / s)
+
+#         # Variables x and t have not been altered
+#         @test isapprox(xx, x, atol=1e-16)
+#         @test isapprox(tt, t, atol=1e-16)
+#     end
+# end

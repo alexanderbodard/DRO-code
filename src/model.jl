@@ -27,7 +27,7 @@ const SOLVER_MODEL = Union{MOSEK_MODEL, CUSTOM_SOLVER_MODEL}
 """
 Model in which the problem dynamics Hx = 0 are imposed by including H in the L matrix.
 """
-struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
+struct DYNAMICS_IN_L_VANILLA_MODEL{T, AI, AF} <: CUSTOM_SOLVER_MODEL
     L :: T
     L_norm :: Float64
     nz :: Int64
@@ -40,12 +40,23 @@ struct DYNAMICS_IN_L_VANILLA_MODEL{T} <: CUSTOM_SOLVER_MODEL
     inds_4b :: UnitRange{Int64}
     inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
     b_bars :: Vector{Vector{Float64}}
-    inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
-    Q_bars :: Vector{Any}
+    inds_4d :: AI
+    Q_bars :: AF
     inds_4e :: UnitRange{Int64}
     workspace_vec :: Vector{Float64}
-    x_workspace :: Vector{Float64}
+    z_workspace :: Vector{Float64}
     v_workspace :: Vector{Float64}
+    vv_workspace :: Vector{Float64}
+    vv_workspace_cuda :: AF
+    vvv_workspace :: AF
+    z :: Vector{Float64}
+    v :: Vector{Float64}
+    rz :: Vector{Float64}
+    rv :: Vector{Float64}
+    zbar :: Vector{Float64}
+    vbar :: Vector{Float64}
+    x0 :: Vector{Float64}
+    nQ :: Int64
 end
 
 """
@@ -65,11 +76,20 @@ struct DYNAMICS_IN_L_SUPERMANN_MODEL{T} <: CUSTOM_SOLVER_MODEL
     inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
     b_bars :: Vector{Vector{Float64}}
     inds_4d :: Vector{Union{UnitRange{Int64}, Int64}}
-    Q_bars :: Vector{Any}
+    Q_bars :: Vector{Vector{Float64}}
     inds_4e :: UnitRange{Int64}
     workspace_vec :: Vector{Float64}
-    x_workspace :: Vector{Float64}
+    z_workspace :: Vector{Float64}
     v_workspace :: Vector{Float64}
+    vv_workspace :: Vector{Float64}
+    vvv_workspace :: Vector{Float64}
+    z :: Vector{Float64}
+    v :: Vector{Float64}
+    rz :: Vector{Float64}
+    rv :: Vector{Float64}
+    zbar :: Vector{Float64}
+    vbar :: Vector{Float64}
+    x0 :: Vector{Float64}
 end
 
 # Union type for all models with dynamics in L
@@ -127,7 +147,7 @@ function build_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynami
         if solver_options.SuperMann
             return build_dynamics_in_l_supermann_model(scen_tree, cost, dynamics, rms)
         else
-            return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms)
+            return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms, gpu=GPU)
         end     
     end
     if solver == RICATTI_SOLVER

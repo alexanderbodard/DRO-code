@@ -87,8 +87,9 @@ println(dyns)
 println(ricats)
 
 pgfplotsx()
-plot(dyns[2:end], fmt = :png, yaxis=:log, labels=["Dynamics in L"], xlabel="N", ylabel = "|| L ||")
-plot!(ricats[2:end], fmt = :png, yaxis=:log, labels=["Ricatti"])
+# plot(dyns[2:end], fmt = :png, yaxis=:log, labels=["Dynamics in L"], xlabel="N", ylabel = "|| L ||")
+# plot!(ricats[2:end], fmt = :png, yaxis=:log, labels=["Ricatti"])
+plot(dyns[2:end] - ricats[2:end], fmt = :png, yaxis=:log, labels=["L difference"], xlabel="N", ylabel = "|| L ||")
 filename = "saved_output/L_norm.png"
 savefig(filename)
 

@@ -3,7 +3,12 @@ module DRO
     ###
     # Problem definition
     ###
-    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles
+    using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools#, CUDA
+
+    GPU = false
+    if GPU
+      using CUDA
+    end
 
     include("scenario_tree.jl")
     include("risk_constraints.jl")
@@ -82,15 +87,23 @@ module DRO
 
     # @time solve_model(reference_model, [2., 2.])
     x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
-    # println("x_ref: ", x_ref)
-    # println("u_ref", u_ref)
-    writedlm("output/log_xref.dat", x_ref, ',')
+    #println(x_ref)
 
-    @time solve_model(vanilla_model, [2., 2.])
-    @time solve_model(vanilla_model, [2., 2.], verbose=true)
-    @time solve_model(supermann_model, [2., 2.])
-    @time solve_model(supermann_model, [2., 2.], verbose=true)
-    # x, u = solve_model(model, [2., 2.], verbose=false)
+    # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
+    # @time solve_model(vanilla_model, [2., 2.], verbose=false)
+    @time solve_model(vanilla_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
+    @time solve_model(vanilla_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
+    # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
+    # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
     # println("x: ", x)
     # println("u: ", u)
+
+    println(vanilla_model.z)
+    # println(vanilla_model.Q_bars)
+    # pgfplotsx()
+    # spy(vanilla_model.L)
+    # savefig("saved_output/spy.png")
+
+    # writedlm("output/L.dat", vanilla_model.L, '\t')
+    # writedlm("output/log_xref.dat", vcat(x_ref, u_ref, s_ref, y_ref), ',')
 end
