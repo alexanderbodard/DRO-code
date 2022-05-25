@@ -473,7 +473,7 @@ function epigraph_bisection!(Q, x, t, workspace, inds, scen_ind :: Int64, nQ :: 
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-12
+        tol = 1e-3
     
         gamma_star = bisection_method!(
             g_lb, 

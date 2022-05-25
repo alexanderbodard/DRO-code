@@ -82,7 +82,7 @@ module DRO
 
     # @time solve_model(reference_model, [2., 2.])
     x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
-    println(x_ref)
+    #println(x_ref)
 
     # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
     # @time solve_model(vanilla_model, [2., 2.], verbose=false)

@@ -130,8 +130,8 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         inds_4b,
         inds_4c,
         b_bars,
-        inds_4d,
-        Q_bars,
+        CuArray(inds_4d),
+        CuArray(Q_bars),
         inds_4e,
         zeros(
             length(scen_tree.min_index_per_timestep) * scen_tree.n_x + 
@@ -139,8 +139,9 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
         ),
         zeros(n_z),
         zeros(n_L),
-        zeros(n_L),
-        zeros(n_L),
+        Mem.pin(Array{Float64}(undef, n_L)), #zeros(n_L),
+        CuArray(zeros(n_L)),
+        CuArray(zeros(n_L)),
         zeros(n_z),
         zeros(n_L),
         zeros(n_z),
@@ -214,7 +215,7 @@ function projection!(
 )
     # 4a
     for ind in model.inds_4a
-        model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
+	model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
     end
 
     # 4b
@@ -222,28 +223,24 @@ function projection!(
     
     # 4c
     for (i, ind) in enumerate(model.inds_4c)
-        b_bar = model.b_bars[i]
-        vv = view(model.vv_workspace, ind)
-        dot_p = LA.dot(vv, b_bar)
-        if dot_p > 0
-            model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) * b_bar
-        end
+	b_bar = model.b_bars[i]
+	vv = view(model.vv_workspace, ind)
+	dot_p = LA.dot(vv, b_bar)
+	if dot_p > 0
+	    model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) * b_bar
+	end
     end
-
+    
     # 4d: Compute cost projection
-    # cost_projection_cuda!(model.Q_bars, model.vv_workspace, model.vvv_workspace, model.inds_4d, model.nQ)
-    Q_bars = CuArray(model.Q_bars)
-    vv_workspace = CuArray(model.vv_workspace)
-    vvv_workspace = CuArray(model.vvv_workspace)
-    inds_4d = CuArray(model.inds_4d)
-    nQ = model.nQ
+    #cost_projection_cuda!(model.Q_bars, model.vv_workspace, model.vvv_workspace, model.inds_4d, model.nQ)
+    copyto!(model.vv_workspace_cuda, model.vv_workspace)
 
-    CUDA.@sync begin
-    	@cuda threads=4 cost_projection_cuda!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)
-    end
+    #CUDA.@sync begin
+    	@cuda threads=4 cost_projection_cuda!(model.Q_bars, model.vv_workspace_cuda, model.vvv_workspace, model.inds_4d, model.nQ)
+    #end
 
-    copyto!(model.vv_workspace, vv_workspace)
-
+    copyto!(model.vv_workspace, model.vv_workspace_cuda)
+    
     # 4e: Dynamics
     @simd for ind in model.inds_4e
         @inbounds @fastmath model.vv_workspace[ind] = 0.
@@ -266,7 +263,7 @@ function prox_g!(
     LA.BLAS.scal!(model.nv, 1. / sigma, model.vv_workspace, stride(model.vv_workspace, 1))
 
     # Result is stored in vv_workspace
-    projection!(model)
+    CUDA.@sync projection!(model)
     
     # LA.BLAS.axpy!(-sigma, model.vv_workspace, arg)
     # copyto!(model.vbar, arg)
@@ -376,7 +373,7 @@ function primal_dual_alg!(
 
     while iter < MAX_ITER_COUNT
         update_zvbar!(model, gamma, sigma)
-        rnorm = update_residual!(model, gamma, sigma)
+        #rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
 
         if rnorm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(model.v)^2)
