@@ -39,3 +39,26 @@ function add_risk_epi_constraints(model::Model, scen_tree :: ScenarioTree, r::Ve
         )
     end
 end
+
+#####################################################
+# Exposed API funcions
+#####################################################
+
+"""
+
+"""
+function get_uniform_rms(A, B, b, C, D, d, N)
+  return [
+        Riskmeasure(
+            A,
+            B,
+            b,
+            C,
+            D
+        ) for _ in 1:(d^(N - 1) - 1) / (d - 1)
+    ]
+end
+
+function get_uniform_rms_risk_neutral()
+  # Todo
+end

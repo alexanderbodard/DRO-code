@@ -33,3 +33,12 @@ function impose_dynamics(model :: Model, scen_tree :: ScenarioTree, dynamics :: 
             + dynamics.B[scen_tree.node_info[i].w] * u[node_to_timestep(scen_tree, scen_tree.anc_mapping[i])]
     )
 end
+
+#####################################################
+# Exposed API funcions
+#####################################################
+
+function get_uniform_dynamics(A :: Vector{Matrix{T}}, B :: Vector{Matrix{T}}) where {T}
+  nx, nu = size(B[1])
+  return Dynamics(A, B, nx, nu)
+end

@@ -102,3 +102,23 @@ function impose_cost(model :: Model, scen_tree :: ScenarioTree, cost :: Cost)
         get_scenario_cost(model, scen_tree, cost, i) <= model[:s][scen_tree.node_info[i].s]
     )
 end
+
+#####################################################
+# Exposed API funcions
+#####################################################
+
+"""
+Return a uniform cost object, i.e. when all stage costs are equal.
+Stage cost equals x' * Q * x + u' * R * u
+N is the number of stages.
+"""
+function get_uniform_cost(Q :: Matrix{F}, R :: Matrix{F}, N :: I) where {F, I}
+  return Cost(
+    collect([
+        Q for _ in 1:N
+    ]),
+    collect([
+        R for _ in 1:N
+    ])
+  )
+end

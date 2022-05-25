@@ -44,34 +44,27 @@ module DRO
     T_s = 0.05
     A = [[[1.,0.] [T_s, 1.0 - rand()*T_s]] for _ in 1:d]
     B = [reshape([0., T_s], :, 1) for _ in 1:d]
-    dynamics = Dynamics(A, B, nx, nu)
+    dynamics = get_uniform_dynamics(A, B)
 
     # Cost: Let's take a quadratic cost, equal at all timesteps
     Q = LA.Matrix([2.2 0; 0 3.7])
     R = reshape([3.2], 1, 1)
-    cost = Cost(
-        collect([
-            Q for _ in 1:N
-        ]),
-        collect([
-            R for _ in 1:N
-        ])
-    )
+    cost = get_uniform_cost(Q, R, N)
 
     # Risk measures: Risk neutral: A = I, B = [I; -I], b = [1;1;-1;-1]
     """
     Risk neutral: A = I, B = [I; -I], b = [0.5;0.5;-0.5;-0.5]
     AVaR: A = I, B = [-I, I, 1^T, -1^T], b = [0; p / alpha; 1, -1]
     """
-    rms = [
-        Riskmeasure(
-            LA.I(2),
-            [LA.I(2); -LA.I(2)],
-            [0.5 , 0.5, -0.5, -0.5],
-            ConvexCone([MOI.Nonnegatives(2)]),
-            ConvexCone([MOI.Nonnegatives(4)])
-        ) for _ in 1:scen_tree.n_non_leaf_nodes
-    ]
+    rms = get_uniform_rms(
+      LA.I(2),
+      [LA.I(2); -LA.I(2)],
+      [0.5 , 0.5, -0.5, -0.5],
+      ConvexCone([MOI.Nonnegatives(2)]),
+      ConvexCone([MOI.Nonnegatives(4)]),
+      d,
+      N
+    )
 
     ###
     # Formulate the optimization problem
