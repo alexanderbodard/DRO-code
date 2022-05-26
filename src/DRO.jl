@@ -37,7 +37,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 2; d = 2; nx = 2; nu = 1
+    N = 7; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
@@ -86,7 +86,7 @@ module DRO
     # println("x: ", x)
     # println("u: ", u)
 
-    # println(vanilla_model.z)
+    println(vanilla_model.z)
     # println(vanilla_model.Q_bars)
     # pgfplotsx()
     # spy(vanilla_model.L)

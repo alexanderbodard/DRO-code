@@ -386,10 +386,10 @@ function bisection_method!(g_lb, g_ub, tol, Q, x, s, workspace)
     g_new = (g_lb + g_ub) / 2
     copyto!(workspace, x)
     ps = psi!(Q, g_new, x, s, workspace)
-    while abs(g_ub - g_lb) > tol
-        if sign(ps) < 0
+    while (g_ub - g_lb) > tol * g_lb
+        if (ps) < 0
           g_ub = g_new
-        elseif sign(ps) > 0
+        elseif (ps) > 0
           g_lb = g_new
         else
             return g_new
@@ -456,7 +456,7 @@ function epigraph_bisection!(Q, x, t, workspace)
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-12
+        tol = 1e-4
         gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t, workspace)
         prox_f!(Q, gamma_star, x)
         return t + gamma_star

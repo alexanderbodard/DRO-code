@@ -30,9 +30,19 @@ function projection!(
     b_bar = model.b_bars[i]
     vv = view(model.vv_workspace, ind)
     dot_p = LA.dot(vv, b_bar)
+
+    # copyto!(model.vvv_workspace, 1, model.vv_workspace, ind[1], ind[end])
+    # dot_p = 0
+    # for j = 1:length(ind)
+    #   @inbounds @fastmath dot_p += model.vvv_workspace[j] + b_bar[j]
+    # end
+
     if dot_p > 0
         dot_p /= LA.dot(b_bar, b_bar)
         b_bar .*= dot_p
+        # @simd for j = 1:length(ind)
+        #   @inbounds @fastmath model.vv_workspace[ind[j]] = model.vvv_workspace[j] - b_bar[j]
+        # end
         @simd for j = 1:length(ind)
           @inbounds @fastmath model.vv_workspace[ind[j]] = vv[j] - b_bar[j]
         end
