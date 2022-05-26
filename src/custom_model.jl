@@ -387,10 +387,10 @@ function bisection_method!(g_lb, g_ub, tol, Q, x, s, workspace)
     copyto!(workspace, x)
     ps = psi!(Q, g_new, x, s, workspace)
     while abs(g_ub - g_lb) > tol
-        if sign(ps) > 0
-            g_lb = g_new
-        elseif sign(ps) < 0
-            g_ub = g_new
+        if sign(ps) < 0
+          g_ub = g_new
+        elseif sign(ps) > 0
+          g_lb = g_new
         else
             return g_new
             error("Should not happen")

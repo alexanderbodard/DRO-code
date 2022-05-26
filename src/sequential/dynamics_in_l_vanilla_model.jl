@@ -1,7 +1,7 @@
 function cost_projection!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)# Q, vector that contains (among other) x | t, workspace
-  # for (scen_ind, ind) in enumerate(inds_4d)
   for scen_ind = 1:length(inds_4d) ÷ nQ
-      ind = inds_4d[(scen_ind - 1) * nQ + 1 : scen_ind * nQ]
+      # ind = inds_4d[(scen_ind - 1) * nQ + 1 : scen_ind * nQ]
+      ind = inds_4d[(scen_ind - 1) * nQ + 1] : inds_4d[scen_ind * nQ]
       vv_workspace[ind[end] + 1] = epigraph_bisection!(
           view(Q_bars, (scen_ind - 1) * nQ + 1 : scen_ind * nQ ),
           view(vv_workspace, ind), 
@@ -30,7 +30,12 @@ function projection!(
     vv = view(model.vv_workspace, ind)
     dot_p = LA.dot(vv, b_bar)
     if dot_p > 0
-        model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) * b_bar
+        dot_p /= LA.dot(b_bar, b_bar)
+        b_bar .*= dot_p
+        @simd for j = 1:length(ind)
+          @inbounds @fastmath model.vv_workspace[ind[j]] = vv[j] - b_bar[j]
+        end
+        # model.vv_workspace[ind] = vv - dot_p / LA.dot(b_bar, b_bar) * b_bar
     end
   end
   
