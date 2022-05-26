@@ -36,7 +36,7 @@ struct DYNAMICS_IN_L_VANILLA_MODEL{T, AI, AF} <: CUSTOM_SOLVER_MODEL
     u_inds :: Vector{Int64}
     s_inds :: Vector{Int64}
     y_inds :: Vector{Int64}
-    inds_4a :: Vector{Union{UnitRange{Int64}, Int64}}
+    inds_4a :: UnitRange{Int64}
     inds_4b :: UnitRange{Int64}
     inds_4c :: Vector{Union{UnitRange{Int64}, Int64}}
     b_bars :: Vector{Vector{Float64}}

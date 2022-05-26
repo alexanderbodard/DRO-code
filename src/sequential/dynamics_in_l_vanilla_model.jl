@@ -17,9 +17,10 @@ function projection!(
   model :: DYNAMICS_IN_L_MODEL,
 )
   # 4a
-  for ind in model.inds_4a
-    model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
-  end
+  # for ind in model.inds_4a
+  #   model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
+  # end
+  model.vv_workspace[model.inds_4a] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, model.inds_4a), MOI.Nonpositives(2))
 
   # 4b
   model.vv_workspace[model.inds_4b] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, model.inds_4b), MOI.Nonpositives(2)) # TODO: Fix polar cone

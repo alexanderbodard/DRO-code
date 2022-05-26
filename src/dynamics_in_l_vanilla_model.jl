@@ -21,14 +21,16 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     # L_norm = sum(L.^2)
 
     # 4a
-    inds_4a = Union{UnitRange{Int64}, Int64}[]
+    inds_4a_start = 1
     offset = 0
     for k = 1:scen_tree.n_non_leaf_nodes
         n_z_part = size(rms[k].A)[2]
-        ind = offset + 1 : offset + n_z_part
-        append!(inds_4a, [ind])
+        # ind = offset + 1 : offset + n_z_part
+        # append!(inds_4a, [ind])
         offset += n_z_part
     end
+    inds_4a_end = offset
+    inds_4a = inds_4a_start : inds_4a_end
 
     # 4b
     inds_4b_start = offset + 1
