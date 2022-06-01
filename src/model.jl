@@ -159,3 +159,9 @@ end
 function solve_model(model :: SOLVER_MODEL, x0 :: Vector{Float64}, tol :: Float64 = 1e-8)
     error("Solving a model of type $(model) is not supported.")
 end
+
+@enum VERBOSE_LEVEL begin
+  SILENT = 1
+  PRINT_CL = 2
+  PRINT_AND_WRITE = 3
+end

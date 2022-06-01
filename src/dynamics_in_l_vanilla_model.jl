@@ -299,8 +299,10 @@ end
 
 function primal_dual_alg!(
     model :: DYNAMICS_IN_L_VANILLA_MODEL;
-    MAX_ITER_COUNT :: Int64 = 20000,
-    tol :: Float64 = 1e-10
+    MAX_ITER_COUNT :: Int64 = 100000,
+    tol :: Float64 = 1e-8,
+    verbose :: VERBOSE_LEVEL = VERBOSE_LEVEL.SILENT,
+    filename = "output/logs.dat"
 )
     iter = 0
     rnorm = Inf
@@ -310,10 +312,24 @@ function primal_dual_alg!(
     sigma = 0.99 / sqrt(model.L_norm)
     gamma = sigma
 
+    # Preallocate extra memory for logging 
+    if verbose == PRINT_AND_WRITE
+      println("Preparing to log data...")
+
+      nx = length(model.x_inds)
+      rnorms = zeros(MAX_ITER_COUNT)
+      xs = zeros(MAX_ITER_COUNT, nx)
+    end
+
     while iter < MAX_ITER_COUNT
         update_zvbar!(model, gamma, sigma)
-        #rnorm = update_residual!(model, gamma, sigma)
+        rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
+
+        if verbose == PRINT_AND_WRITE
+          rnorms[iter + 1] = rnorm
+          xs[iter+1, :] = model.z[model.x_inds]
+        end
 
         if rnorm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(model.v)^2)
             println("Breaking!", iter)
@@ -322,9 +338,26 @@ function primal_dual_alg!(
 
         iter += 1
     end
+
+    # Write away logs
+    if verbose == PRINT_AND_WRITE
+      println("Writing logs to output file...")
+
+      writedlm(filename, rnorms[1:iter+1], ',')
+      writedlm("output/x.dat", xs[1:iter+1, :], ',')
+    end
 end
 
-function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
+function solve_model(
+  model :: DYNAMICS_IN_L_VANILLA_MODEL, 
+  x0 :: Vector{Float64}; 
+  tol :: Float64 = 1e-8, 
+  verbose :: VERBOSE_LEVEL = VERBOSE_LEVEL.SILENT,
+  filename  = "output/logs.dat",
+  return_all :: Bool = false, 
+  z0 :: Union{Vector{Float64}, Nothing} = nothing, 
+  v0 :: Union{Vector{Float64}, Nothing} = nothing,
+)
     if z0 !== nothing && v0 !== nothing
         copyto!(model.z, z0)
         copyto!(model.v, v0)
@@ -332,5 +365,5 @@ function solve_model(model :: DYNAMICS_IN_L_VANILLA_MODEL, x0 :: Vector{Float64}
 
     copyto!(model.x0, x0)
 
-    primal_dual_alg!(model, tol=tol)
+    primal_dual_alg!(model, tol=tol, verbose=verbose, filename = filename)
 end

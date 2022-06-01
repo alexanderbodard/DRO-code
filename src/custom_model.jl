@@ -319,24 +319,43 @@ function psi!(Q, gamma, x, s)
     return 0.5 * res - gamma - s
 end
 
+# function psi!(Q, gamma, x, s, workspace)
+#     prox_f!(Q, gamma, x, workspace)
+#     res = 0
+#     @simd for i = 1:length(x)
+#         @inbounds @fastmath res += Q[i] * workspace[i]^2
+#     end
+#     return 0.5 * res - gamma - s
+# end
+
 function psi!(Q, gamma, x, s, workspace)
-    prox_f!(Q, gamma, x, workspace)
-    res = 0
-    @simd for i = 1:length(x)
-        @inbounds @fastmath res += Q[i] * workspace[i]^2
-    end
-    return 0.5 * res - gamma - s
+  # prox_f!(Q, gamma, x, workspace)
+  res = 0
+  gamma_inv = 1. / gamma
+  @simd for i = 1:length(x)
+      @inbounds @fastmath res += workspace[i] * Q[i] / (Q[i] + gamma_inv)^2
+  end
+  return 0.5 * res * gamma_inv^2 - gamma - s
 end
 
-function psi!(Q, gamma, x, s, workspace, inds, scen_ind :: Int64, nQ :: Int64)
-    prox_f!(Q, gamma, x, workspace, inds, scen_ind, nQ)
+# function psi!(Q, gamma, x, s, workspace, inds, scen_ind :: Int64, nQ :: Int64)
+#     prox_f!(Q, gamma, x, workspace, inds, scen_ind, nQ)
 
-    res = 0
-    @simd for i = (scen_ind - 1) * nQ + 1 : scen_ind * nQ
-        @inbounds @fastmath res += Q[i] * workspace[inds[i]]^2
-    end
-    return 0.5 * res - gamma - s
-end
+#     res = 0
+#     @simd for i = (scen_ind - 1) * nQ + 1 : scen_ind * nQ
+#         @inbounds @fastmath res += Q[i] * workspace[inds[i]]^2
+#     end
+#     return 0.5 * res - gamma - s
+# end
+
+# function psi!(Q, gamma, x, s, workspace, inds, scen_ind :: Int64, nQ :: Int64)
+#   res = 0
+#   gamma_inv = 1. / gamma
+#   @simd for i = (scen_ind - 1) * nQ + 1 : scen_ind * nQ
+#       @inbounds @fastmath res += x[i]^2 * Q[i] / (Q[i] + gamma_inv)^2
+#   end
+#   return 0.5 * res * gamma_inv^2 - gamma - s
+# end
 
 function bisection_method_copy!(g_lb, g_ub, tol, Q, x, s)
     g_new = (g_lb + g_ub) / 2
@@ -384,7 +403,10 @@ end
 
 function bisection_method!(g_lb, g_ub, tol, Q, x, s, workspace)
     g_new = (g_lb + g_ub) / 2
-    copyto!(workspace, x)
+    # copyto!(workspace, x)
+    @simd for i = 1:length(x)
+      @inbounds @fastmath workspace[i] = x[i]^2
+    end
     ps = psi!(Q, g_new, x, s, workspace)
     while (g_ub - g_lb) > tol * g_lb
         if (ps) < 0
@@ -456,7 +478,7 @@ function epigraph_bisection!(Q, x, t, workspace)
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-4
+        tol = 1e-12
         gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t, workspace)
         prox_f!(Q, gamma_star, x)
         return t + gamma_star

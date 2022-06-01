@@ -18,7 +18,7 @@ function projection!(
 )
   # 4a
   # for ind in model.inds_4a
-  #   model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
+    # model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, ind), MOI.Nonpositives(2)) # TODO: Fix polar cone
   # end
   model.vv_workspace[model.inds_4a] = MOD.projection_on_set(MOD.DefaultDistance(), view(model.vv_workspace, model.inds_4a), MOI.Nonpositives(2))
 
