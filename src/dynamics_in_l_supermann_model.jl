@@ -190,54 +190,18 @@ function P_mult(x, L, alpha1, alpha2)
     return vcat(x1 / alpha1 - L' * x2, -L * x1 + x2 / alpha2)
 end
 
-# function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.5)
-#     Ps = P_mult(s, L, alpha1, alpha2)
-#     d = -rx
-#     stilde = y
-#     n = length(s)
-#     for i = 1 : k
-#         inds = (i - 1) * n + 1 : i * n
-#         stilde += LA.dot(Sbuf[inds], stilde) / LA.dot(Sbuf[inds], Stildebuf[inds]) * (Sbuf[inds] - Stildebuf[inds])
-#         d += LA.dot(Sbuf[inds], d) / LA.dot(Sbuf[inds], Stildebuf[inds]) * (Sbuf[inds] - Stildebuf[inds])
-#     end
-
-#     gamma = LA.dot(stilde, Ps) / LA.dot(s, Ps)
-#     if abs(gamma) >= theta_bar
-#         theta = 1
-#     elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
-#         theta = (1 - theta_bar)
-#     else
-#         theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
-#     end
-
-#     stilde = (1 - theta) * s + theta * stilde
-#     d += LA.dot(Ps, d) / LA.dot(Ps, stilde) * (s - stilde)
-
-#     if k < MAX_K
-#         # Update sets
-#         k += 1
-#         Sbuf[(k - 1) * n + 1 : k * n] = s
-#         Stildebuf[(k - 1) * n + 1 : k * n] = stilde
-#         PSbuf[(k - 1) * n + 1 : k * n] = Ps
-#     else
-#         k = 0
-#     end
-
-#     return d, k
-# end
-
-function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.2)
-    # Ps = P_mult(s, L, alpha1, alpha2)
+function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.5)
+    Ps = P_mult(s, L, alpha1, alpha2)
     d = -rx
     stilde = y
     n = length(s)
     for i = 1 : k
         inds = (i - 1) * n + 1 : i * n
-        stilde += LA.dot(Sbuf[inds], stilde) * Stildebuf[inds]
-        d += LA.dot(Sbuf[inds], d) * (Stildebuf[inds])
+        stilde += LA.dot(Sbuf[inds], stilde) / LA.dot(Sbuf[inds], Stildebuf[inds]) * (Sbuf[inds] - Stildebuf[inds])
+        d += LA.dot(Sbuf[inds], d) / LA.dot(Sbuf[inds], Stildebuf[inds]) * (Sbuf[inds] - Stildebuf[inds])
     end
 
-    gamma = LA.dot(stilde, s) / LA.dot(s, s)
+    gamma = LA.dot(stilde, Ps) / LA.dot(s, Ps)
     if abs(gamma) >= theta_bar
         theta = 1
     elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
@@ -246,15 +210,15 @@ function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_
         theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
     end
 
-    stilde = theta / (1 - theta + theta * gamma) / LA.dot(s, s) * (s - stilde)
-    d += LA.dot(s, d) * stilde
+    stilde = (1 - theta) * s + theta * stilde
+    d += LA.dot(Ps, d) / LA.dot(Ps, stilde) * (s - stilde)
 
     if k < MAX_K
         # Update sets
         k += 1
         Sbuf[(k - 1) * n + 1 : k * n] = s
         Stildebuf[(k - 1) * n + 1 : k * n] = stilde
-        # PSbuf[(k - 1) * n + 1 : k * n] = Ps
+        PSbuf[(k - 1) * n + 1 : k * n] = Ps
     else
         k = 0
     end
@@ -264,9 +228,8 @@ end
 
 function primal_dual_alg!(
     model :: DYNAMICS_IN_L_SUPERMANN_MODEL;
-    DEBUG :: Bool = false, 
-    tol :: Float64 = 1e-12, 
-    MAX_ITER_COUNT :: Int64 = 20000,
+    tol :: Float64 = 1e-8, 
+    MAX_ITER_COUNT :: Int64 = 100000,
     SUPERMANN_BACKTRACKING_MAX :: Int64 = 8,
     beta :: Float64 = 0.5,
     MAX_BROYDEN_K :: Int64 = 20,
@@ -287,49 +250,35 @@ function primal_dual_alg!(
     eta = r_safe
     broyden_k = 0
 
-    x = model.z
+    # x = model.z
     v = model.v
-    x0 = model.x0
 
-    wx = zeros(length(x))
-    wv = zeros(length(v))
-    wxbar = zeros(length(x))
-    wvbar = zeros(length(v))
-    d_x = zeros(length(x))
-    d_v = zeros(length(v))
-    r_x = zeros(length(x))
-    r_v = zeros(length(v))
-    r_wx = zeros(length(x))
-    r_wv = zeros(length(v))
-    S = zeros((length(x) + length(v))* MAX_BROYDEN_K)
-    Stilde = zeros((length(x) + length(v))* MAX_BROYDEN_K)
-    PS = zeros((length(x) + length(v))* MAX_BROYDEN_K)
+    wx = zeros(model.nz)
+    wv = zeros(model.nv)
+    wxbar = zeros(model.nz)
+    wvbar = zeros(model.nv)
+    d_x = zeros(model.nz)
+    d_v = zeros(model.nv)
+    r_x = zeros(model.nz)
+    r_v = zeros(model.nv)
+    r_wx = zeros(model.nz)
+    r_wv = zeros(model.nv)
+    S = zeros((model.nz + model.nv)* MAX_BROYDEN_K)
+    Stilde = zeros((model.nz + model.nv)* MAX_BROYDEN_K)
+    PS = zeros((model.nz + model.nv)* MAX_BROYDEN_K)
 
-    d_xv = zeros(length(x) + length(v))
+    d_xv = zeros(model.nz + model.nv)
 
-    xold = ones(length(x) + length(v))
-    xresold = ones(length(x) + length(v))
+    xold = ones(model.nz + model.nv)
+    xresold = ones(model.nz + model.nv)
     if !LOW_MEMORY
-        H = LA.I(length(x) + length(v))
+        H = LA.I(model.nz + model.nv)
     end
 
     D = 1e4
-    P = [[1/gamma * LA.I(length(x)) -model.L']; [-model.L 1/sigma * LA.I(length(v))]]
+    P = [[1/gamma * LA.I(model.nz) -model.L']; [-model.L 1/sigma * LA.I(model.nv)]]
     rho = 0
     rtilde_norm = 0
-
-    if DEBUG
-        n_z = length(x)
-        log_x = zeros(MAX_ITER_COUNT, n_z)
-        log_v = zeros(MAX_ITER_COUNT, length(v))
-        nx = length(model.x_inds)
-        nu = length(model.u_inds)
-        ns = length(model.s_inds)
-        ny = length(model.y_inds)
-        xinit = copy(x[1:nx])
-        log_residuals = zeros(MAX_ITER_COUNT)
-        log_tau = zeros(MAX_ITER_COUNT)
-    end
 
     # TODO: Work with some tolerance
     counter = 0
@@ -337,20 +286,20 @@ function primal_dual_alg!(
 
         # Compute xbar
         copyto!(model.v_workspace, v)
-        for i = 1:length(v)
+        for i = 1:model.nv
             model.v_workspace[i] *= gamma
         end
-        xbar = x - L_mult(model, model.v_workspace, true) - Gamma_grad_mult(model, x, gamma)
+        xbar = model.z - L_mult(model, model.v_workspace, true) - Gamma_grad_mult(model, model.z, gamma)
 
         # Compute vbar
-        for i = 1:length(x)
-            model.z_workspace[i] = sigma * (2 * xbar[i] - x[i])
+        for i = 1:model.nz
+            model.z_workspace[i] = sigma * (2 * xbar[i] - model.z[i])
         end
 
-        vbar = prox_hstar(model, x0, v + L_mult(model, model.z_workspace), sigma)
+        vbar = prox_hstar(model, model.x0, v + L_mult(model, model.z_workspace), sigma)
 
         # Compute the residual
-        r_x = x - xbar
+        r_x = model.z - xbar
         r_v = v - vbar
         r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
 
@@ -361,15 +310,15 @@ function primal_dual_alg!(
         # Choose an update direction
         if !LOW_MEMORY
             H = broyden_sherman_morrison(H, vcat(wx, wv) - xold, vcat(wx - wxbar, wv - wvbar) - xresold, model.L, gamma, sigma)
-            xold = vcat(x, v)
-            xresold = vcat(x - xbar, v - vbar)
+            xold = vcat(model.z, v)
+            xresold = vcat(model.z - xbar, v - vbar)
             d_xv = -H * vcat(r_x, r_v)
-            d_x = d_xv[1:length(x)]; d_v = d_xv[length(x)+1 : end]
+            d_x = d_xv[1:model.nz]; d_v = d_xv[model.nz+1 : end]
         else            
-            d_xv, broyden_k = broyden(S, Stilde, PS, d_xv, vcat(wx, wv) - xold, vcat(wx - wxbar, wv - wvbar) - xresold, vcat(x - xbar, v - vbar), broyden_k, model.L, gamma, sigma, MAX_K = MAX_BROYDEN_K)
-            d_x = d_xv[1:length(x)]; d_v = d_xv[length(x) + 1 : end]
-            xold = vcat(x, v)
-            xresold = vcat(x - xbar, v - vbar)
+            d_xv, broyden_k = broyden(S, Stilde, PS, d_xv, vcat(wx, wv) - xold, vcat(wx - wxbar, wv - wvbar) - xresold, vcat(model.z - xbar, v - vbar), broyden_k, model.L, gamma, sigma, MAX_K = MAX_BROYDEN_K)
+            d_x = d_xv[1:model.nz]; d_v = d_xv[model.nz + 1 : end]
+            xold = vcat(model.z, v)
+            xresold = vcat(model.z - xbar, v - vbar)
         end
 
         d_norm = sqrt(p_norm(d_x, d_v, d_x, d_v, model.L, gamma, sigma))
@@ -390,7 +339,7 @@ function primal_dual_alg!(
             wx = copy(x)
             wv = copy(v)
             wxbar = wx - L_mult(model, wv * gamma, true) - Gamma_grad_mult(model, wx, gamma)
-            wvbar = prox_hstar(model, x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
+            wvbar = prox_hstar(model, model.x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
 
             loop = false
         end
@@ -400,11 +349,11 @@ function primal_dual_alg!(
 
         # Educated and GKM iterations
         while loop && backtrack_count < SUPERMANN_BACKTRACKING_MAX
-            wx = x + tau * d_x
+            wx = model.z + tau * d_x
             wv = v + tau * d_v
 
             wxbar = wx - L_mult(model, wv * gamma, true) - Gamma_grad_mult(model, wx, gamma)
-            wvbar = prox_hstar(model, x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
+            wvbar = prox_hstar(model, model.x0, wv + L_mult(model, sigma * (2 * wxbar - wx)), sigma)
 
             r_wx = wx - wxbar
             r_wv = wv - wvbar
@@ -412,7 +361,7 @@ function primal_dual_alg!(
 
             # Check for educated update
             if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
-                copyto!(x, wx)
+                copyto!(model.z, wx)
                 copyto!(v, wv)
                 r_safe = rtilde_norm + q^counter# * r_norm0
                 loop = false
@@ -422,7 +371,10 @@ function primal_dual_alg!(
             rho = p_norm(r_wx, r_wv, r_wx - tau * d_x, r_wv - tau * d_v, model.L, gamma, sigma)
             if rho >= k2_sigma * r_norm * rtilde_norm
                 rho /= rtilde_norm^2
-                x = x - lambda * rho * r_wx
+                # model.z = model.z - lambda * rho * r_wx
+                for i = 1:model.nz
+                  model.z[i] -= lambda * rho * r_wx[i]
+                end
                 v = v - lambda * rho * r_wv
                 loop = false
                 break
@@ -433,20 +385,17 @@ function primal_dual_alg!(
         end
         if loop === true
             # Update x by averaging step
-            x = lambda * xbar + (1 - lambda) * x
+            # model.z = lambda * xbar + (1 - lambda) * model.z
+            for i = 1:model.nz
+              model.z[i] *= (1 - lambda)
+              model.z[i] += lambda * xbar[i]
+            end
 
             # Update v by averaging step
-            for i = 1:length(v)
+            for i = 1:model.nv
                 v[i] *= (1 - lambda)
                 v[i] += lambda * vbar[i]
             end
-        end
-
-        if DEBUG
-            log_x[counter + 1, 1:end] = x
-            log_v[counter + 1, 1:end] = v
-            log_residuals[counter + 1] = r_norm
-            log_tau[counter+1] = tau
         end
 
         if r_norm < tol
@@ -455,8 +404,6 @@ function primal_dual_alg!(
         end
         counter += 1
     end
-
-    println(x)
 end
 
 function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
