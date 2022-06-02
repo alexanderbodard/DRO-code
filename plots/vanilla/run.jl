@@ -16,32 +16,55 @@ Random.seed!(1234)
 Ns = [3, 5, 7]
 alphas = [0.1, 0.5, 0.9]
 
-model, ref_model = get_tp1(3, 0.1)
+global model
 
-for N in Ns
+# Log
+for (N_i, N) in enumerate(Ns)
   for (alpha_i, alpha) in enumerate(alphas)
-    model, _ = get_tp1(N, alpha)
+    global model, ref_model = get_tp1(N, alpha)
 
     DRO.solve_model(
       model, 
-      [2., 2.], 
+      [1., 1.], 
       verbose=DRO.PRINT_AND_WRITE, 
       path = "logs/",
-      filename = "vanilla_$(N)_$(alpha_i).dat", 
+      filename = "vanilla_tp1_$(N)_$(alpha_i)", 
       z0=zeros(model.nz), 
       v0=zeros(model.nv),
-      tol=1e-8
+      tol=1e-6,
+      MAX_ITER_COUNT = Int(7.5e5),
+      log_stride = 100
     )
+  end
+end
+
+# timings
+timings = zeros(length(Ns), length(alphas))
+
+for (N_i, N) in enumerate(Ns)
+  for (alpha_i, alpha) in enumerate(alphas)
+    global model, ref_model = get_tp1(N, alpha)
 
     bt = @benchmark DRO.solve_model(
       model, 
-      [2., 2.],
+      [1., 1.],
       z0=zeros(model.nz), 
       v0=zeros(model.nv),
-      tol=1e-8
+      tol=1e-6,
+      MAX_ITER_COUNT = Int(7.5e5)
     )
 
     t = minimum(bt.times)
-    println(t)
+    timings[N_i, alpha_i] = t
   end
 end
+
+open("output/vanilla_tp1_timings.txt"; write=true) do f
+  write(f, "{alpha = 0.1} {alpha = 0.5} {alpha = 0.9}\n")
+  writedlm(f, timings * 1e-6, ' ')
+end
+
+# Spy plot
+model, ref_model = get_tp1(3, 0.5)
+Plots.spy(model.L, legend=nothing)
+savefig("output/tp1_spy.pdf")

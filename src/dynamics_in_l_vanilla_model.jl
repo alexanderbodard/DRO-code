@@ -303,7 +303,8 @@ function primal_dual_alg!(
     tol :: Float64 = 1e-8,
     verbose :: VERBOSE_LEVEL = SILENT,
     path = "logs/",
-    filename = "logs"
+    filename = "logs",
+    log_stride :: Int64 = 1
 )
     iter = 0
     rnorm = Inf
@@ -315,11 +316,12 @@ function primal_dual_alg!(
 
     # Preallocate extra memory for logging 
     if verbose == PRINT_AND_WRITE
-      println("Preparing to log data...")
+      println("Starting solve step...")
 
       nx = length(model.x_inds)
-      rnorms = zeros(MAX_ITER_COUNT)
-      xs = zeros(MAX_ITER_COUNT, nx)
+      n_iter_log = Int(floor(MAX_ITER_COUNT / log_stride))
+      rnorms = zeros(n_iter_log)
+      xs = zeros(n_iter_log, nx)
     end
 
     while iter < MAX_ITER_COUNT
@@ -327,9 +329,9 @@ function primal_dual_alg!(
         rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
 
-        if verbose == PRINT_AND_WRITE
-          rnorms[iter + 1] = rnorm
-          xs[iter+1, :] = model.z[model.x_inds]
+        if verbose == PRINT_AND_WRITE && iter % log_stride == 0
+          rnorms[iter ÷ log_stride + 1] = rnorm
+          xs[(iter ÷ log_stride +1), :] = model.z[model.x_inds]
         end
 
         if rnorm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(model.v)^2)
@@ -346,8 +348,9 @@ function primal_dual_alg!(
     if verbose == PRINT_AND_WRITE
       println("Writing logs to output file...")
 
-      writedlm(path * filename * "residual.dat", rnorms[1:iter], ',')
-      writedlm(path * filename * "x.dat", xs[1:iter, :], ',')
+      writedlm(path * filename * "_residual.dat", rnorms[1:iter ÷ log_stride], ',')
+      writedlm(path * filename * "_x.dat", xs[1:iter ÷ log_stride, :], ',')
+      println("Finished logging.")
     end
 end
 
@@ -355,9 +358,11 @@ function solve_model(
   model :: DYNAMICS_IN_L_VANILLA_MODEL, 
   x0 :: Vector{Float64}; 
   tol :: Float64 = 1e-8, 
+  MAX_ITER_COUNT :: Int64 = 100000,
   verbose :: VERBOSE_LEVEL = SILENT,
   path = "logs/",
   filename  = "logs",
+  log_stride :: Int64 = 1,
   return_all :: Bool = false, 
   z0 :: Union{Vector{Float64}, Nothing} = nothing, 
   v0 :: Union{Vector{Float64}, Nothing} = nothing,
@@ -369,5 +374,5 @@ function solve_model(
 
     copyto!(model.x0, x0)
 
-    primal_dual_alg!(model, tol=tol, verbose=verbose, filename = filename)
+    primal_dual_alg!(model, tol=tol, verbose=verbose, filename = filename, path=path, MAX_ITER_COUNT = MAX_ITER_COUNT, log_stride = log_stride)
 end
