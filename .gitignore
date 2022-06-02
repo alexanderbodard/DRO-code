@@ -26,3 +26,7 @@ Manifest.toml
 # Output folder
 src/output/*
 !*.gitkeep
+
+# Log folders
+plots/*/logs/*
+!*.gitkeep

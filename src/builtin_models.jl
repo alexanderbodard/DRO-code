@@ -2,9 +2,9 @@
 This file contains some predefined models.
 """
 
-function get_tm1()
+function get_tp1(N :: Int64, alpha :: Float64)
   # Scenario tree
-  N = 3; d = 2; nx = 2; nu = 1
+  d = 2; nx = 2; nu = 1
   scen_tree = generate_scenario_tree(N, d, nx, nu)
 
   # Dynamics: Based on a discretized car model
@@ -19,7 +19,7 @@ function get_tm1()
   cost = get_uniform_cost(Q, R, N)
 
   # Risk measures
-  p_ref = [0.5, 0.5]; alpha=.1
+  p_ref = [0.5, 0.5]
   rms = get_uniform_rms_avar(p_ref, alpha, d, N)
 
   return build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER), build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)

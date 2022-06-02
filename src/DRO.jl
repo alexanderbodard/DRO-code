@@ -30,7 +30,7 @@ module DRO
 
     Random.seed!(1234)
 
-    export get_tm1
+    export get_tp1
 
     ##########################
     # Mosek reference implementation
@@ -99,20 +99,20 @@ module DRO
     # writedlm("output/L.dat", vanilla_model.L, '\t')
     # writedlm("output/log_xref.dat", vcat(x_ref, u_ref, s_ref, y_ref), ',')
 
-    model, ref_model = get_tm1()
+    # model, ref_model = get_tm1()
 
-    ### Determine reference solution
-    x_ref, u_ref, s_ref, y_ref = solve_model(ref_model, [2., 2.])
-    writedlm("output/reference_solution.dat", x_ref, ',')
+    # ### Determine reference solution
+    # x_ref, u_ref, s_ref, y_ref = solve_model(ref_model, [2., 2.])
+    # writedlm("output/reference_solution.dat", x_ref, ',')
 
-    ### Run vanilla solver
-    solve_model(
-      model, 
-      [2., 2.], 
-      verbose=DRO.PRINT_AND_WRITE, 
-      filename = "output/residuals.dat", 
-      z0=zeros(model.nz), 
-      v0=zeros(model.nv),
-      tol=1e-4
-    )
+    # ### Run vanilla solver
+    # solve_model(
+    #   model, 
+    #   [2., 2.], 
+    #   verbose=DRO.PRINT_AND_WRITE, 
+    #   filename = "output/residuals.dat", 
+    #   z0=zeros(model.nz), 
+    #   v0=zeros(model.nv),
+    #   tol=1e-4
+    # )
 end

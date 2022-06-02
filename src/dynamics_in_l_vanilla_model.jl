@@ -301,8 +301,9 @@ function primal_dual_alg!(
     model :: DYNAMICS_IN_L_VANILLA_MODEL;
     MAX_ITER_COUNT :: Int64 = 100000,
     tol :: Float64 = 1e-8,
-    verbose :: VERBOSE_LEVEL = VERBOSE_LEVEL.SILENT,
-    filename = "output/logs.dat"
+    verbose :: VERBOSE_LEVEL = SILENT,
+    path = "logs/",
+    filename = "logs"
 )
     iter = 0
     rnorm = Inf
@@ -332,7 +333,9 @@ function primal_dual_alg!(
         end
 
         if rnorm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(model.v)^2)
-            println("Breaking!", iter)
+            if verbose == PRINT_CL || verbose == PRINT_AND_WRITE
+              println("Breaking!", iter)
+            end
             break
         end
 
@@ -343,8 +346,8 @@ function primal_dual_alg!(
     if verbose == PRINT_AND_WRITE
       println("Writing logs to output file...")
 
-      writedlm(filename, rnorms[1:iter+1], ',')
-      writedlm("output/x.dat", xs[1:iter+1, :], ',')
+      writedlm(path * filename * "residual.dat", rnorms[1:iter], ',')
+      writedlm(path * filename * "x.dat", xs[1:iter, :], ',')
     end
 end
 
@@ -352,8 +355,9 @@ function solve_model(
   model :: DYNAMICS_IN_L_VANILLA_MODEL, 
   x0 :: Vector{Float64}; 
   tol :: Float64 = 1e-8, 
-  verbose :: VERBOSE_LEVEL = VERBOSE_LEVEL.SILENT,
-  filename  = "output/logs.dat",
+  verbose :: VERBOSE_LEVEL = SILENT,
+  path = "logs/",
+  filename  = "logs",
   return_all :: Bool = false, 
   z0 :: Union{Vector{Float64}, Nothing} = nothing, 
   v0 :: Union{Vector{Float64}, Nothing} = nothing,
