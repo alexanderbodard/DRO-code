@@ -147,7 +147,7 @@ function build_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynami
         if solver_options.SuperMann
             return build_dynamics_in_l_supermann_model(scen_tree, cost, dynamics, rms)
         else
-            return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms, gpu=GPU)
+            return build_dynamics_in_l_vanilla_model(scen_tree, cost, dynamics, rms, gpu=(@isdefined GPU))
         end     
     end
     if solver == RICATTI_SOLVER

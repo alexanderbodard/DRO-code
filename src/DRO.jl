@@ -5,7 +5,7 @@ module DRO
     ###
     using ProximalOperators, Random, JuMP, MosekTools, SparseArrays, Plots, Profile, DelimitedFiles, ForwardDiff, BenchmarkTools#, CUDA
 
-    if @isdefined GPU && GPU == true
+    if (@isdefined GPU)
       using CUDA
     end
 

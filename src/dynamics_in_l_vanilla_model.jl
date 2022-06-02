@@ -1,4 +1,4 @@
-if GPU
+if @isdefined GPU
   include("cuda/dynamics_in_l_vanilla_model.jl")
 else
   include("sequential/dynamics_in_l_vanilla_model.jl")
@@ -304,15 +304,21 @@ function primal_dual_alg!(
     verbose :: VERBOSE_LEVEL = SILENT,
     path = "logs/",
     filename = "logs",
-    log_stride :: Int64 = 1
+    log_stride :: Int64 = 1,
+    gamma :: Union{Float64, Nothing} = nothing,
+    sigma :: Union{Float64, Nothing} = nothing
 )
     iter = 0
     rnorm = Inf
     
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 0.5
-    sigma = 0.99 / sqrt(model.L_norm)
-    gamma = sigma
+    if sigma === nothing
+      sigma = 0.99 / sqrt(model.L_norm)
+    end
+    if gamma === nothing
+      gamma = sigma
+    end
 
     # Preallocate extra memory for logging 
     if verbose == PRINT_AND_WRITE
@@ -366,6 +372,8 @@ function solve_model(
   return_all :: Bool = false, 
   z0 :: Union{Vector{Float64}, Nothing} = nothing, 
   v0 :: Union{Vector{Float64}, Nothing} = nothing,
+  gamma :: Union{Float64, Nothing} = nothing,
+  sigma :: Union{Float64, Nothing} = nothing
 )
     if z0 !== nothing && v0 !== nothing
         copyto!(model.z, z0)
@@ -374,5 +382,5 @@ function solve_model(
 
     copyto!(model.x0, x0)
 
-    primal_dual_alg!(model, tol=tol, verbose=verbose, filename = filename, path=path, MAX_ITER_COUNT = MAX_ITER_COUNT, log_stride = log_stride)
+    primal_dual_alg!(model, tol=tol, verbose=verbose, filename = filename, path=path, MAX_ITER_COUNT = MAX_ITER_COUNT, log_stride = log_stride, sigma = sigma, gamma = gamma)
 end

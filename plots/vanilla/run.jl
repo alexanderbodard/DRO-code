@@ -68,3 +68,31 @@ end
 model, ref_model = get_tp1(3, 0.5)
 Plots.spy(model.L, legend=nothing)
 savefig("output/tp1_spy.pdf")
+
+# L norms
+model, ref_model = get_tp1(3, 0.5)
+sigmas = [0.99 * 2.0^(-i) for i = 0:10] / sqrt(model.L_norm)
+norms = zeros(length(sigmas))
+
+for (sigma_i, sigma) in enumerate(sigmas)
+  norms[sigma_i] = model.L_norm * ((2.0^(sigma_i-1))^2)
+
+  DRO.solve_model(
+    model, 
+    [1., 1.], 
+    verbose=DRO.PRINT_AND_WRITE, 
+    path = "logs/",
+    filename = "vanilla_tp1_norms_$(sigma_i)", 
+    z0=zeros(model.nz), 
+    v0=zeros(model.nv),
+    tol=1e-6,
+    MAX_ITER_COUNT = Int(7.5e5),
+    log_stride = 10,
+    sigma = sigma,
+    gamma = sigma
+  )
+end
+
+open("logs/vanilla_tp1_lnorms.txt"; write=true) do f
+  writedlm(f, norms, ' ')
+end
