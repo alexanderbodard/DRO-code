@@ -22,13 +22,14 @@ linestyles = [:solid, :dash, :dashdot]
 
 norms = readdlm("logs/vanilla_tp1_lnorms.txt", ' ')
 
+ys = zeros(length(norms))
 for i = 1:length(norms)
   solution = readdlm("logs/vanilla_tp1_norms_$(i)_x.dat", ',')
   iterations = STRIDE * length(solution)
   scatter!([norms[i]], [iterations], xaxis=:log, yaxis=:log, color = :blue)
-  
-  # plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=[L"N = %$(N), \alpha = %$(alpha)"], yaxis=:log, color=colors[N_i], linestyle=linestyles[alpha_i])
+  ys[i] = iterations
 end
+plot!(norms, ys, xaxis=:log, yaxis=:log, color=:blue)
 
 
 filename = "output/vanilla_tp1_lnorms_a.png"

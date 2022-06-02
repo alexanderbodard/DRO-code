@@ -73,7 +73,6 @@ savefig("output/tp1_spy.pdf")
 model, ref_model = get_tp1(3, 0.5)
 sigmas = [0.99 * 2.0^(-i) for i = 0:10] / sqrt(model.L_norm)
 norms = zeros(length(sigmas))
-
 for (sigma_i, sigma) in enumerate(sigmas)
   norms[sigma_i] = model.L_norm * ((2.0^(sigma_i-1))^2)
 
@@ -92,7 +91,39 @@ for (sigma_i, sigma) in enumerate(sigmas)
     gamma = sigma
   )
 end
-
 open("logs/vanilla_tp1_lnorms.txt"; write=true) do f
   writedlm(f, norms, ' ')
+end
+
+# Timings for fixed stepsize
+Ns = collect(9:-1:2)
+timings = zeros(length(Ns))
+alpha = 0.5
+gamma = 0.0; sigma = 0.0
+
+for (N_i, N) in enumerate(Ns)
+  global model, ref_model = get_tp1(N, alpha)
+  println("Benchmarking N = $(N)")
+
+  if N_i == 1
+    gamma = 0.99 / sqrt(model.L_norm)
+    sigma = gamma
+  end
+
+  bt = @benchmark DRO.solve_model(
+    model, 
+    [1., 1.],
+    z0=zeros(model.nz), 
+    v0=zeros(model.nv),
+    tol=1e-6,
+    MAX_ITER_COUNT = 10,
+    gamma = gamma,
+    sigma = sigma
+  )
+
+  t = minimum(bt.times)
+  timings[N_i] = t
+end
+open("logs/vanilla_tp1_timings_fixed_step.txt"; write=true) do f
+  writedlm(f, timings * 1e-6, ' ')
 end
