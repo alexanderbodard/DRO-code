@@ -19,6 +19,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
 
     L_norm = maximum(LA.svdvals(collect(L)))^2
     # L_norm = sum(L.^2)
+    # L_norm = 2.0^(N-9) * 259
 
     # 4a
     inds_4a_start = 1

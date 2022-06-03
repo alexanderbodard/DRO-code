@@ -100,3 +100,15 @@ end
 function get_uniform_rms_risk_neutral(p, d, N)
   return get_uniform_rms_avar(p, 1., d, N)
 end
+
+function get_uniform_rms_tv(p, r, d, N)
+  return get_uniform_rms(
+    hcat(LA.I(d), zeros(d, d)),
+    vcat(hcat(zeros(1, d), ones(1, d)), hcat(LA.I(d), -LA.I(d)), hcat(-LA.I(d), -LA.I(d))),
+    [r; p; -p],
+    ConvexCone([MOI.Nonnegatives(2*d)]),
+    ConvexCone([MOI.Nonnegatives(2*d+1)]),
+    d,
+    N
+  )
+end

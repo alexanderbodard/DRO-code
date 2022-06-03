@@ -52,7 +52,7 @@ fig = plot(
   fmt = :png,
   legend = false
 )
-
+scatter!(2:Nmax, norms, yaxis=:log, color=:blue, legend=false)
 plot!(2:Nmax, norms, yaxis=:log, color=:blue, legend=false)
 
 filename = "output/vanilla_tp1_lnorms_b.png"

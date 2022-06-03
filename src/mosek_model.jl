@@ -2,12 +2,16 @@
 # Mosek model
 ######
 
+using Gurobi, Ipopt
+
 """
 This function returns a Mosek model for the given problem.
 """
 function build_mosek_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: Dynamics, rms :: Vector{Riskmeasure})
     # Define model, primal variables, epigraph variables and objective
     model = Model(Mosek.Optimizer)
+    # model = Model(Gurobi.Optimizer)
+    # model = Model(Ipopt.Optimizer)
     set_silent(model)
 
     @variable(model, x[i=1:scen_tree.n * scen_tree.n_x])
