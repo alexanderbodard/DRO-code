@@ -15,7 +15,7 @@ function build_mosek_model(scen_tree :: ScenarioTree, cost :: Cost, dynamics :: 
     set_silent(model)
 
     @variable(model, x[i=1:scen_tree.n * scen_tree.n_x])
-    @variable(model, u[i=1:(length(scen_tree.min_index_per_timestep) - 1) * scen_tree.n_u])
+    @variable(model, u[i=1:scen_tree.n_non_leaf_nodes * scen_tree.n_u])
     @variable(model, s[i=1:scen_tree.n * 1])
 
     @objective(model, Min, s[1])

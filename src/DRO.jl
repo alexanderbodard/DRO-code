@@ -78,7 +78,7 @@ module DRO
     # Solve the optimization problem
     ###
 
-    # @time solve_model(reference_model, [0.001, 0.01])
+    @time solve_model(reference_model, [2., 2.])
     # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
     # println(x_ref, s_ref)
 
@@ -86,7 +86,7 @@ module DRO
     # @time solve_model(vanilla_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
     # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
     # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
-    # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
+    @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
     # @time solve_model(vanilla_model, [3.01, 0.83], verbose=false)
     # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(supermann_model.nz), v0=zeros(supermann_model.nv))
     # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
