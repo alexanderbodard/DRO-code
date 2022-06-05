@@ -237,7 +237,11 @@ function primal_dual_alg!(
     c0 :: Float64 = 0.99,
     c1 :: Float64 = 0.99,
     q :: Float64 = 0.99,
-    LOW_MEMORY :: Bool = true
+    LOW_MEMORY :: Bool = true,
+    verbose :: VERBOSE_LEVEL = SILENT,
+    path = "logs/",
+    filename  = "logs",
+    log_stride :: Int64 = 1
 )
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 1.#0.5
@@ -280,6 +284,16 @@ function primal_dual_alg!(
     rho = 0
     rtilde_norm = 0
 
+    # Preallocate extra memory for logging 
+    if verbose == PRINT_AND_WRITE
+      println("Starting solve step...")
+
+      nx = length(model.x_inds)
+      n_iter_log = Int(floor(MAX_ITER_COUNT / log_stride))
+      rnorms = zeros(n_iter_log)
+      xs = zeros(n_iter_log, nx)
+    end
+
     # TODO: Work with some tolerance
     counter = 0
     while counter < MAX_ITER_COUNT
@@ -302,6 +316,11 @@ function primal_dual_alg!(
         r_x = model.z - xbar
         r_v = v - vbar
         r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
+
+        if verbose == PRINT_AND_WRITE && counter % log_stride == 0
+          rnorms[counter ÷ log_stride + 1] = sqrt(LA.dot(r_x, r_x) + LA.dot(r_v, r_v))
+          xs[(counter ÷ log_stride +1), :] = model.z[model.x_inds]
+        end
 
         if counter === 0
             r_norm0 = r_norm
@@ -363,7 +382,7 @@ function primal_dual_alg!(
             if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
                 copyto!(model.z, wx)
                 copyto!(v, wv)
-                r_safe = rtilde_norm + q^counter# * r_norm0
+                r_safe = rtilde_norm + q^counter #* r_norm0
                 loop = false
                 break
             end
@@ -398,15 +417,37 @@ function primal_dual_alg!(
             end
         end
 
-        if r_norm < tol
+        if r_norm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(v)^2)
             println("Breaking!", counter)
             break
         end
         counter += 1
     end
+
+    # Write away logs
+    if verbose == PRINT_AND_WRITE
+      println("Writing logs to output file...")
+
+      writedlm(path * filename * "_residual.dat", rnorms[1:counter ÷ log_stride], ',')
+      writedlm(path * filename * "_x.dat", xs[1:counter ÷ log_stride, :], ',')
+      println("Finished logging.")
+    end
 end
 
-function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float64}; tol :: Float64 = 1e-8, verbose :: Bool = false, return_all :: Bool = false, z0 :: Union{Vector{Float64}, Nothing} = nothing, v0 :: Union{Vector{Float64}, Nothing} = nothing)
+function solve_model(
+  model :: DYNAMICS_IN_L_SUPERMANN_MODEL, 
+  x0 :: Vector{Float64}; 
+  tol :: Float64 = 1e-8, 
+  verbose :: VERBOSE_LEVEL = SILENT,
+  path = "logs/",
+  filename  = "logs",
+  log_stride :: Int64 = 1,
+  return_all :: Bool = false, 
+  z0 :: Union{Vector{Float64}, Nothing} = nothing, 
+  v0 :: Union{Vector{Float64}, Nothing} = nothing, 
+  MAX_ITER_COUNT :: Int64 = 100000,
+  LOW_MEMORY :: Bool = true,
+)
     if z0 !== nothing && v0 !== nothing
         copyto!(model.z, z0)
         copyto!(model.v, v0)
@@ -414,5 +455,5 @@ function solve_model(model :: DYNAMICS_IN_L_SUPERMANN_MODEL, x0 :: Vector{Float6
 
     copyto!(model.x0, x0)
 
-    primal_dual_alg!(model, tol=tol)
+    primal_dual_alg!(model, tol=tol, MAX_ITER_COUNT=MAX_ITER_COUNT, verbose=verbose, filename = filename, path=path, log_stride=log_stride, LOW_MEMORY = LOW_MEMORY)
 end
