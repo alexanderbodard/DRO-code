@@ -17,7 +17,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     L = construct_L_with_dynamics(scen_tree, rms, dynamics, n_L, n_z)
     L_trans = L'
 
-    L_norm = maximum(LA.svdvals(collect(L)))^2
+    # L_norm = maximum(LA.svdvals(collect(L)))^2
     # L_norm = sum(L.^2)
     # L_norm = 2.0^(N-9) * 259
 
@@ -252,6 +252,8 @@ function get_rnorm(
     sigma :: Float64
 )
     # TODO: Implement this properly
+    return sqrt(LA.dot(model.rz, model.rz) + LA.dot(model.rv, model.rv))
+
     return sqrt(
         LA.dot(model.rz, model.rz) / gamma 
         + LA.dot(model.rv, model.rv) / sigma
@@ -311,6 +313,7 @@ function primal_dual_alg!(
 )
     iter = 0
     rnorm = Inf
+    rnorm_old = Inf
     
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 0.5
@@ -332,6 +335,8 @@ function primal_dual_alg!(
     end
 
     while iter < MAX_ITER_COUNT
+    	rnorm_old = rnorm
+
         update_zvbar!(model, gamma, sigma)
         rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
