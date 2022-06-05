@@ -17,7 +17,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
     L = construct_L_with_dynamics(scen_tree, rms, dynamics, n_L, n_z)
     L_trans = L'
 
-    # L_norm = maximum(LA.svdvals(collect(L)))^2
+    L_norm = maximum(LA.svdvals(collect(L)))^2
     # L_norm = sum(L.^2)
     # L_norm = 2.0^(N-9) * 259
 

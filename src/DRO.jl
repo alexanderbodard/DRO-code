@@ -29,7 +29,7 @@ module DRO
 
     Random.seed!(1234)
 
-    export get_tp1
+    export get_tp1, get_tp2
 
     ##########################
     # Mosek reference implementation
@@ -40,7 +40,7 @@ module DRO
     ###
 
     # Scenario tree
-    N = 10; d = 2; nx = 2; nu = 1
+    N = 3; d = 2; nx = 2; nu = 1
     scen_tree = generate_scenario_tree(N, d, nx, nu)
 
     # Dynamics: Based on a discretized car model
@@ -61,15 +61,16 @@ module DRO
     """
     rms = get_uniform_rms_robust(d, N)
 
-    p_ref = [0.5, 0.5]; alpha=.1
+    p_ref = [0.5, 0.5]; alpha=0.01
     rms = get_uniform_rms_avar(p_ref, alpha, d, N)
-    # rms = get_uniform_rms_tv(p_ref, 0.9, d, N)
+    # rms = get_uniform_rms_tv(p_ref, 0., d, N)
+    # rms = get_uniform_rms_risk_neutral(p_ref, d, N)
 
     ###
     # Formulate the optimization problem
     ###
 
-    reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
+    # reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
     vanilla_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
     # println(vanilla_model.L_norm)
     # supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
@@ -78,20 +79,36 @@ module DRO
     # Solve the optimization problem
     ###
 
-    @time solve_model(reference_model, [2., 2.])
+    # @time solve_model(reference_model, [2., 2.])
     # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
-    # println(x_ref, s_ref)
+    # println(x_ref[1:4])
 
     # z, v, x, u =  solve_model(vanilla_model, [2., 2.], return_all = true, tol=1e-12, verbose=false)
     # @time solve_model(vanilla_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
     # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
     # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
-    @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
+    @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000, tol=1e-6)
     # @time solve_model(vanilla_model, [3.01, 0.83], verbose=false)
     # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(supermann_model.nz), v0=zeros(supermann_model.nv))
     # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
     # println("x: ", x)
     # println("u: ", u)
+
+    pgfplotsx()
+
+    # println(vanilla_model.v[vanilla_model.inds_4d])
+    res = Float64[]
+    for i in vanilla_model.inds_4d
+      if abs(vanilla_model.v[i]) > 1e-6
+        append!(res, abs(vanilla_model.v[i]))
+      end
+    end
+    # p = scatter(abs.(vanilla_model.v[vanilla_model.inds_4d]), zeros(length(vanilla_model.inds_4d)), xaxis=:log, ylims=(-1., 1.))
+    # p = scatter(res, zeros(length(res)), ylims=(-1, 1))
+    # display(p)
+
+    p = histogram(abs.(vanilla_model.v[vanilla_model.inds_4d]), bins=10.0 .^ (-20:2), xaxis=:log, xlims=(1e-20, 100))
+    display(p)
 
     # println(vanilla_model.z[1:4])
     # println(vanilla_model.Q_bars)
