@@ -13,7 +13,7 @@ Random.seed!(123)
 ### TP1
 ######################
 
-Ns = [3, 5]
+Ns = [3]
 alphas = [0.1, 0.5, 0.9]
 
 global model
@@ -31,7 +31,7 @@ for (N_i, N) in enumerate(Ns)
       filename = "supermann_tp1_$(N)_$(alpha_i)", 
       z0=zeros(model.nz), 
       v0=zeros(model.nv),
-      tol=1e-6,
+      tol=2e-4,
       MAX_ITER_COUNT = Int(2.5e4),
       log_stride = 10
     )
@@ -51,7 +51,7 @@ for (N_i, N) in enumerate(Ns)
       filename = "supermann_tp1_sherman_$(N)_$(alpha_i)", 
       z0=zeros(model.nz), 
       v0=zeros(model.nv),
-      tol=1e-6,
+      tol=2e-4,
       MAX_ITER_COUNT = Int(5e4),
       log_stride = 10,
       LOW_MEMORY=false

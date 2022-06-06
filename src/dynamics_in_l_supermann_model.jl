@@ -249,7 +249,7 @@ function primal_dual_alg!(
     gamma = sigma
 
     r_norm = 0
-    r_norm0 = Inf
+    r_norm0 = 0
     r_safe = Inf  # Correct initial value is set during first iteration
     eta = r_safe
     broyden_k = 0
@@ -297,6 +297,9 @@ function primal_dual_alg!(
     # TODO: Work with some tolerance
     counter = 0
     while counter < MAX_ITER_COUNT
+        if counter === 1
+          r_norm0 = r_norm
+        end
 
         # Compute xbar
         copyto!(model.v_workspace, v)
@@ -320,10 +323,6 @@ function primal_dual_alg!(
         if verbose == PRINT_AND_WRITE && counter % log_stride == 0
           rnorms[counter ÷ log_stride + 1] = sqrt(LA.dot(r_x, r_x) + LA.dot(r_v, r_v))
           xs[(counter ÷ log_stride +1), :] = model.z[model.x_inds]
-        end
-
-        if counter === 0
-            r_norm0 = r_norm
         end
 
         # Choose an update direction
@@ -382,7 +381,7 @@ function primal_dual_alg!(
             if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
                 copyto!(model.z, wx)
                 copyto!(v, wv)
-                r_safe = rtilde_norm + q^counter #* r_norm0
+                r_safe = rtilde_norm + q^counter
                 loop = false
                 break
             end
@@ -417,7 +416,7 @@ function primal_dual_alg!(
             end
         end
 
-        if r_norm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(v)^2)
+        if r_norm < tol * r_norm0
             println("Breaking!", counter)
             break
         end

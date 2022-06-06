@@ -31,7 +31,7 @@ for (N_i, N) in enumerate(Ns)
       filename = "vanilla_tp1_$(N)_$(alpha_i)", 
       z0=zeros(model.nz), 
       v0=zeros(model.nv),
-      tol=1e-6,
+      tol=2e-4,
       MAX_ITER_COUNT = Int(7.5e5),
       log_stride = 100
     )
@@ -150,7 +150,7 @@ for (N_i, N) in enumerate(Ns)
       filename = "vanilla_tp2_$(N)_$(alpha_i)", 
       z0=zeros(model.nz), 
       v0=zeros(model.nv),
-      tol=1e-6,
+      tol=2e-4,
       MAX_ITER_COUNT = Int(7.5e5),
       log_stride = 100
     )
