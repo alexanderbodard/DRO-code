@@ -6,7 +6,7 @@ pgfplotsx()
 ### TP1
 ######################
 
-Ns = [3]
+Ns = [5]
 alphas = [0.1, 0.5, 0.9]
 alphas_text = alphas[end:-1:1]
 STRIDE = 10

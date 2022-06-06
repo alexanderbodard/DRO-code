@@ -487,6 +487,8 @@ function primal_dual_alg!(
       writedlm(path * filename * "_ks.dat", ks[1:counter ÷ log_stride, :], ',')
       println("Finished logging.")
     end
+
+    copyto!(model.v, v)
 end
 
 function solve_model(
