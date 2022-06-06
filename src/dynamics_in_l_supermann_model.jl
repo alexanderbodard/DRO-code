@@ -190,6 +190,42 @@ function P_mult(x, L, alpha1, alpha2)
     return vcat(x1 / alpha1 - L' * x2, -L * x1 + x2 / alpha2)
 end
 
+# function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.2)
+#   # Ps = P_mult(s, L, alpha1, alpha2)
+#   d = -rx
+#   stilde = y
+#   n = length(s)
+#   for i = 1 : k
+#       inds = (i - 1) * n + 1 : i * n
+#       stilde += LA.dot(Sbuf[inds], stilde) * Stildebuf[inds]
+#       d += LA.dot(Sbuf[inds], d) * (Stildebuf[inds])
+#   end
+
+#   gamma = LA.dot(stilde, s) / LA.dot(s, s)
+#   if abs(gamma) >= theta_bar
+#       theta = 1
+#   elseif gamma === 0 # In Julia, sign(0) = 0, whereas we define it as sign(0) = 1; handle separately
+#       theta = (1 - theta_bar)
+#   else
+#       theta = (1 - sign(gamma) * theta_bar) / (1 - gamma)
+#   end
+
+#   stilde = theta / (1 - theta + theta * gamma) / LA.dot(s, s) * (s - stilde)
+#   d += LA.dot(s, d) * stilde
+
+#   if k < MAX_K
+#       # Update sets
+#       k += 1
+#       Sbuf[(k - 1) * n + 1 : k * n] = s
+#       Stildebuf[(k - 1) * n + 1 : k * n] = stilde
+#       # PSbuf[(k - 1) * n + 1 : k * n] = Ps
+#   else
+#       k = 0
+#   end
+
+#   return d, k
+# end
+
 function broyden(Sbuf, Stildebuf, PSbuf, d, s, y, rx, k, L, alpha1, alpha2; MAX_K = 20, theta_bar = 0.5)
     Ps = P_mult(s, L, alpha1, alpha2)
     d = -rx
@@ -289,13 +325,15 @@ function primal_dual_alg!(
       println("Starting solve step...")
 
       nx = length(model.x_inds)
-      n_iter_log = Int(floor(MAX_ITER_COUNT / log_stride))
+      n_iter_log = Int(floor(MAX_ITER_COUNT * SUPERMANN_BACKTRACKING_MAX / log_stride))
       rnorms = zeros(n_iter_log)
       xs = zeros(n_iter_log, nx)
+      ks = zeros(n_iter_log)
     end
 
     # TODO: Work with some tolerance
     counter = 0
+    log_counter = 0
     while counter < MAX_ITER_COUNT
         if counter === 1
           r_norm0 = r_norm
@@ -320,10 +358,10 @@ function primal_dual_alg!(
         r_v = v - vbar
         r_norm = sqrt(p_norm(r_x, r_v, r_x, r_v, model.L, gamma, sigma))
 
-        if verbose == PRINT_AND_WRITE && counter % log_stride == 0
-          rnorms[counter ÷ log_stride + 1] = sqrt(LA.dot(r_x, r_x) + LA.dot(r_v, r_v))
-          xs[(counter ÷ log_stride +1), :] = model.z[model.x_inds]
-        end
+        # if verbose == PRINT_AND_WRITE && counter % log_stride == 0
+        #   rnorms[counter ÷ log_stride + 1] = r_norm
+        #   xs[(counter ÷ log_stride +1), :] = model.z[model.x_inds]
+        # end
 
         # Choose an update direction
         if !LOW_MEMORY
@@ -377,12 +415,24 @@ function primal_dual_alg!(
             r_wv = wv - wvbar
             rtilde_norm = sqrt(p_norm(r_wx, r_wv, r_wx, r_wv, model.L, gamma, sigma))
 
+            log_counter += 1
+
+            if verbose == PRINT_AND_WRITE && log_counter % log_stride == 0
+              rnorms[log_counter ÷ log_stride + 1] = r_norm
+              xs[(log_counter ÷ log_stride +1), :] = model.z[model.x_inds]
+            end
+
             # Check for educated update
             if r_norm <= r_safe && rtilde_norm <= c1 * r_norm
                 copyto!(model.z, wx)
                 copyto!(v, wv)
                 r_safe = rtilde_norm + q^counter
                 loop = false
+
+                if verbose == PRINT_AND_WRITE && counter % log_stride == 0
+                  ks[counter ÷ log_stride + 1] = tau
+                end
+
                 break
             end
             # Check for GKM update
@@ -395,6 +445,11 @@ function primal_dual_alg!(
                 end
                 v = v - lambda * rho * r_wv
                 loop = false
+
+                if verbose == PRINT_AND_WRITE && counter % log_stride == 0
+                  ks[counter ÷ log_stride + 1] = - tau
+                end
+
                 break
             end
             # Backtrack
@@ -427,8 +482,9 @@ function primal_dual_alg!(
     if verbose == PRINT_AND_WRITE
       println("Writing logs to output file...")
 
-      writedlm(path * filename * "_residual.dat", rnorms[1:counter ÷ log_stride], ',')
-      writedlm(path * filename * "_x.dat", xs[1:counter ÷ log_stride, :], ',')
+      writedlm(path * filename * "_residual.dat", rnorms[1:log_counter ÷ log_stride], ',')
+      writedlm(path * filename * "_x.dat", xs[1:log_counter ÷ log_stride, :], ',')
+      writedlm(path * filename * "_ks.dat", ks[1:counter ÷ log_stride, :], ',')
       println("Finished logging.")
     end
 end

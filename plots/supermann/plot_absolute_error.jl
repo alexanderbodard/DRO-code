@@ -6,7 +6,7 @@ pgfplotsx()
 ### TP1
 ######################
 
-Ns = [5]
+Ns = [3]
 alphas = [0.1, 0.5, 0.9]
 alphas_text = alphas[end:-1:1]
 STRIDE = 10
@@ -14,7 +14,7 @@ STRIDE = 10
 ALPHA = 0.9
 
 fig = plot(
-  xlabel = "Iteration",
+  xlabel = "# calls to prox operators",
   ylabel = "Error " * L"\Vert x^k - x^\star \Vert / \Vert x^\star \Vert"
 )
 
@@ -35,10 +35,10 @@ for (N_i, N) in enumerate(Ns)
   end
 end
 
-STRIDE = 100
+# STRIDE = 100
 for (N_i, N) in enumerate(Ns)
   for (alpha_i, alpha) in Iterators.reverse(enumerate(alphas))
-    solution = readdlm("../vanilla/logs/vanilla_tp1_$(N)_$(alpha_i)_x.dat", ',')
+    solution = readdlm("logs/vanilla_tp1_$(N)_$(alpha_i)_x.dat", ',')
     errs = Float64[]
     for i = 1:size(solution)[1]-1
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
@@ -50,7 +50,7 @@ for (N_i, N) in enumerate(Ns)
 end
 
 
-filename = "output/supermann_tp1_absolute_error.png"
+filename = "output/supermann_tp1_absolute_error_$(ALPHA).png"
 savefig(filename)
 
 # ######################
@@ -86,5 +86,5 @@ for (N_i, N) in enumerate(Ns)
 end
 
 
-filename = "output/supermann_tp1_sherman_absolute_error.png"
+filename = "output/supermann_tp1_sherman_absolute_error_$(ALPHA).png"
 savefig(filename)
