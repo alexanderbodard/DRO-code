@@ -15,7 +15,7 @@ function build_dynamics_in_l_vanilla_model(scen_tree :: ScenarioTree, cost :: Co
 
     n_L = get_n_L(scen_tree, rms, eliminate_states)
     L = construct_L_with_dynamics(scen_tree, rms, dynamics, n_L, n_z)
-    L_trans = L'
+    # L_trans = L'
 
     L_norm = maximum(LA.svdvals(collect(L)))^2
     # L_norm = sum(L.^2)
@@ -252,6 +252,8 @@ function get_rnorm(
     sigma :: Float64
 )
     # TODO: Implement this properly
+    return sqrt(LA.dot(model.rz, model.rz) + LA.dot(model.rv, model.rv))
+
     return sqrt(
         LA.dot(model.rz, model.rz) / gamma 
         + LA.dot(model.rv, model.rv) / sigma
@@ -311,6 +313,7 @@ function primal_dual_alg!(
 )
     iter = 0
     rnorm = Inf
+    rnorm_0 = 0.
     
     # Choose sigma and gamma such that sigma * gamma * model.L_norm < 1
     lambda = 0.5
@@ -332,6 +335,10 @@ function primal_dual_alg!(
     end
 
     while iter < MAX_ITER_COUNT
+      if iter === 1
+      	rnorm_0 = rnorm
+      end
+
         update_zvbar!(model, gamma, sigma)
         rnorm = update_residual!(model, gamma, sigma)
         update_zv!(model, lambda)
@@ -341,7 +348,7 @@ function primal_dual_alg!(
           xs[(iter ÷ log_stride +1), :] = model.z[model.x_inds]
         end
 
-        if rnorm < tol * sqrt(LA.norm(model.z)^2 + LA.norm(model.v)^2)
+        if rnorm < tol * rnorm_0
             if verbose == PRINT_CL || verbose == PRINT_AND_WRITE
               println("Breaking!", iter)
             end

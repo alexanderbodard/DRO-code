@@ -13,6 +13,8 @@ function cost_projection_cuda!(Q_bars, vv_workspace, vvv_workspace, inds_4d, nQ)
   end
   """
   scen_ind = convert(Int64, CUDA.threadIdx().x)
+  block_ind = convert(Int64, CUDA.blockIdx().x)
+  scen_ind = scen_ind + 32 * (block_ind - 1)
   epigraph_bisection!(
     Q_bars,
       vv_workspace, 
@@ -52,11 +54,11 @@ model.vv_workspace[ind] = MOD.projection_on_set(MOD.DefaultDistance(), view(mode
   copyto!(model.vv_workspace_cuda, model.vv_workspace)
 
   #CUDA.@sync begin
-    @cuda threads=4 cost_projection_cuda!(model.Q_bars, model.vv_workspace_cuda, model.vvv_workspace, model.inds_4d, model.nQ)
+    @cuda threads=(32) blocks=16 cost_projection_cuda!(model.Q_bars, model.vv_workspace_cuda, model.vvv_workspace, model.inds_4d, model.nQ)
   #end
 
   copyto!(model.vv_workspace, model.vv_workspace_cuda)
-  
+
   # 4e: Dynamics
   @simd for ind in model.inds_4e
       @inbounds @fastmath model.vv_workspace[ind] = 0.
