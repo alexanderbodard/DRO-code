@@ -29,6 +29,8 @@ module DRO
 
     Random.seed!(1234)
 
+    BISECTION_TOL = 1e-4
+
     export get_tp1, get_tp2
 
     ##########################

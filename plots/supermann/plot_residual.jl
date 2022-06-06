@@ -6,16 +6,17 @@ pgfplotsx()
 ### TP1
 ######################
 
-Ns = [5]
+Ns = [3]
 alphas = [0.1, 0.5, 0.9]
 alphas_text = alphas[end:-1:1]
 STRIDE = 10
 
-ALPHA = 0.9
+ALPHA = 0.5
 
 fig = plot(
-  xlabel = "Iteration",
-  ylabel = "Residual " * L"\Vert R x \Vert"
+  xlabel = "# calls to prox operators",
+  ylabel = "Residual " * L"\Vert R x \Vert",
+  # xlims=(0, 2.5e5)
 )
 
 colors = [:blue, :green, :red]
@@ -25,16 +26,18 @@ linestyles_text = linestyles[end:-1:1]
 for (N_i, N) in enumerate(Ns)
   for (alpha_i, alpha) in Iterators.reverse(enumerate(alphas))
     residuals = readdlm("logs/supermann_tp1_$(N)_$(alpha_i)_residual.dat", ',')
+    residuals = residuals[2:end]
     if alpha == ALPHA
       plot!(1:STRIDE:length(residuals)*STRIDE, residuals, fmt = :png, labels=["SuperMann - Restarted Broyden"], yaxis=:log, color=colors[N_i])
     end
   end
 end
 
-STRIDE=100
+# STRIDE=100
 for (N_i, N) in enumerate(Ns)
   for (alpha_i, alpha) in Iterators.reverse(enumerate(alphas))
-    residuals = readdlm("../vanilla/logs/vanilla_tp1_$(N)_$(alpha_i)_residual.dat", ',')
+    residuals = readdlm("logs/vanilla_tp1_$(N)_$(alpha_i)_residual.dat", ',')
+    residuals = residuals[2:end]
     if alpha == ALPHA
       plot!(1:STRIDE:length(residuals)*STRIDE, residuals, fmt = :png, labels=["Vanilla CP"], yaxis=:log, color=:red)
     end
@@ -42,7 +45,7 @@ for (N_i, N) in enumerate(Ns)
 end
 
 
-filename = "output/supermann_tp1_residual.png"
+filename = "output/supermann_tp1_residual_$(ALPHA).png"
 savefig(filename)
 
 # ######################
@@ -63,6 +66,7 @@ STRIDE=10
 for (N_i, N) in enumerate(Ns)
   for (alpha_i, alpha) in Iterators.reverse(enumerate(alphas))
     residuals = readdlm("logs/supermann_tp1_sherman_$(N)_$(alpha_i)_residual.dat", ',')
+    residuals = residuals[2:end]
     if alpha === ALPHA
       plot!(1:STRIDE:length(residuals)*STRIDE, residuals, fmt = :png, labels=["SuperMann - Full Broyden"], yaxis=:log, color=:green, linestyle=linestyles_text[alpha_i])
     end
@@ -70,5 +74,5 @@ for (N_i, N) in enumerate(Ns)
 end
 
 
-filename = "output/supermann_tp1_sherman_residual.png"
+filename = "output/supermann_tp1_sherman_residual_$(ALPHA).png"
 savefig(filename)

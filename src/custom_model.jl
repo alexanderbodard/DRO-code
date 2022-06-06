@@ -447,7 +447,7 @@ function epigraph_bisection(Q, x, t)
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-4
+        tol=BISECTION_TOL
         gamma_star = bisection_method_copy!(g_lb, g_ub, tol, Q, x, t)
         res = prox_f_copy(Q, gamma_star, x)
         # return res, 0.5 * sum(res .* Q .* res)
@@ -461,7 +461,7 @@ function epigraph_bisection!(Q, x, t)
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-4
+        tol=BISECTION_TOL
         gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t)
         prox_f!(Q, gamma_star, x)
         return t + gamma_star
@@ -479,7 +479,7 @@ function epigraph_bisection!(Q, x, t, workspace)
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-4
+        tol=BISECTION_TOL
         gamma_star = bisection_method!(g_lb, g_ub, tol, Q, x, t, workspace)
         prox_f!(Q, gamma_star, x)
         return t + gamma_star
@@ -496,7 +496,7 @@ function epigraph_bisection!(Q, x, t, workspace, inds, scen_ind :: Int64, nQ :: 
     if f > t
         local g_lb = 0 # TODO: How close to zero?
         local g_ub = f - t #1. TODO: Can be tighter with gamma
-        tol = 1e-4
+        tol=BISECTION_TOL
     
         gamma_star = bisection_method!(
             g_lb, 
