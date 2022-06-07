@@ -72,16 +72,16 @@ module DRO
     # Formulate the optimization problem
     ###
 
-    # reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
+    reference_model = build_model(scen_tree, cost, dynamics, rms, MOSEK_SOLVER)
     # vanilla_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER)
     # println(vanilla_model.L_norm)
-    supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
+    # supermann_model = build_model(scen_tree, cost, dynamics, rms, DYNAMICS_IN_L_SOLVER, solver_options=SolverOptions(true))
 
     ###
     # Solve the optimization problem
     ###
 
-    # @time solve_model(reference_model, [2., 2.])
+    @time solve_model(reference_model, [2., 2.])
     # x_ref, u_ref, s_ref, y_ref = solve_model(reference_model, [2., 2.])
     # println(x_ref[1:4])
 
@@ -91,7 +91,7 @@ module DRO
     # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000)
     # @time solve_model(vanilla_model, [2., 2.], verbose=PRINT_CL, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv), MAX_ITER_COUNT=1000000, tol=1e-6)
     # @time solve_model(vanilla_model, [3.01, 0.83], verbose=false)
-    @time solve_model(supermann_model, [2., 2.], verbose=SILENT, z0=zeros(supermann_model.nz), v0=zeros(supermann_model.nv), MAX_ITER_COUNT=100000, tol=1e-6)
+    # @time solve_model(supermann_model, [2., 2.], verbose=SILENT, z0=zeros(supermann_model.nz), v0=zeros(supermann_model.nv), MAX_ITER_COUNT=100000, tol=1e-6)
     # @time solve_model(supermann_model, [2., 2.], verbose=false, z0=zeros(vanilla_model.nz), v0=zeros(vanilla_model.nv))
     # println("x: ", x)
     # println("u: ", u)

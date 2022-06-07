@@ -30,7 +30,7 @@ for (N_i, N) in enumerate(Ns)
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
     if alpha == ALPHA
-      plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=["SuperMann - Restarted Broyden"], yaxis=:log, color=colors[N_i])
+      plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=["SuperMann - Restarted Broyden"], yaxis=:log, color=colors[N_i])
     end
   end
 end
@@ -44,13 +44,13 @@ for (N_i, N) in enumerate(Ns)
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
     if alpha == ALPHA
-      plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=["Vanilla CP"], yaxis=:log, color=:red)
+      plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=["Vanilla CP"], yaxis=:log, color=:red)
     end
   end
 end
 
 
-filename = "output/supermann_tp1_absolute_error_$(ALPHA).png"
+filename = "output/supermann_tp1_absolute_error_$(ALPHA).pdf"
 savefig(filename)
 
 # ######################
@@ -80,11 +80,11 @@ for (N_i, N) in enumerate(Ns)
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
     if alpha === ALPHA
-      plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=["SuperMann - Full Broyden"], yaxis=:log, color=:green)
+      plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=["SuperMann - Full Broyden"], yaxis=:log, color=:green)
     end
   end
 end
 
 
-filename = "output/supermann_tp1_sherman_absolute_error_$(ALPHA).png"
+filename = "output/supermann_tp1_sherman_absolute_error_$(ALPHA).pdf"
 savefig(filename)

@@ -15,7 +15,7 @@ ALPHA = 0.9
 
 fig = plot(
   xlabel = "Iteration",
-  ylabel = L"\tau",
+  ylabel = L"\pm \tau",
   # xlims=(0, 2.5e5)
   resolution=(800,300)
 )
@@ -31,22 +31,22 @@ for (N_i, N) in enumerate(Ns)
     println(size(ks))
     k1 = ks[ks[:, 2] .> 0, :]
     if alpha == ALPHA
-      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :png, labels=["Educated update"], color=:red, markersize = 2)
+      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :pdf, labels=["Educated update"], color=:red, markersize = 2, legend=false)
     end
     k2 = ks[ks[:, 2] .< 0, :]
     if alpha == ALPHA
-      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :png, labels=["GKM update"], color=:blue, markersize = 2)
+      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :pdf, labels=["GKM update"], color=:blue, markersize = 2, legend=false)
     end
   end
 end
 
 
-filename = "output/supermann_tp1_ks_sherman_$(ALPHA).png"
+filename = "output/supermann_tp1_ks_sherman_$(ALPHA).pdf"
 savefig(filename)
 
 fig = plot(
   xlabel = "Iteration",
-  ylabel = L"\tau",
+  ylabel = L"\pm \tau",
   # xlims=(0, 2.5e5)
 )
 
@@ -60,15 +60,15 @@ for (N_i, N) in enumerate(Ns)
     ks = hcat(1:STRIDE:length(ks)*STRIDE, ks)
     k1 = ks[ks[:, 2] .> 0, :]
     if alpha == ALPHA
-      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :png, labels=["Educated update"], color=:red, markersize = 2)
+      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :pdf, labels=["Educated update"], color=:red, markersize = 2, legend=false)
     end
     k2 = ks[ks[:, 2] .< 0, :]
     if alpha == ALPHA
-      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :png, labels=["GKM update"], color=:blue, markersize = 2)
+      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :pdf, labels=["GKM update"], color=:blue, markersize = 2, legend=false)
     end
   end
 end
 
 
-filename = "output/supermann_tp1_ks_$(ALPHA).png"
+filename = "output/supermann_tp1_ks_$(ALPHA).pdf"
 savefig(filename)
