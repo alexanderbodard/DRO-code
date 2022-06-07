@@ -13,7 +13,7 @@ alpha = 0.5
 fig = plot(
   xlabel = L"\Vert L \Vert",
   ylabel = "Number of iterations",
-  fmt = :png,
+  fmt = :pdf,
   legend = false
 )
 
@@ -32,7 +32,7 @@ end
 plot!(norms, ys, xaxis=:log, yaxis=:log, color=:blue)
 
 
-filename = "output/vanilla_tp1_lnorms_a.png"
+filename = "output/vanilla_tp1_lnorms_a.pdf"
 savefig(filename)
 
 """
@@ -49,11 +49,11 @@ end
 fig = plot(
   xlabel = L"N",
   ylabel = L"\Vert L \Vert",
-  fmt = :png,
+  fmt = :pdf,
   legend = false
 )
 scatter!(2:Nmax, norms, yaxis=:log, color=:blue, legend=false)
 plot!(2:Nmax, norms, yaxis=:log, color=:blue, legend=false)
 
-filename = "output/vanilla_tp1_lnorms_b.png"
+filename = "output/vanilla_tp1_lnorms_b.pdf"
 savefig(filename)

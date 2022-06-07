@@ -12,7 +12,7 @@ alpha = 0.5
 fig = plot(
   xlabel = L"N",
   ylabel = "Execution time (ms)",
-  fmt = :png,
+  fmt = :pdf,
   legend = false
 )
 
@@ -27,5 +27,5 @@ for (N_i, N) in enumerate(Ns)
 end
 
 
-filename = "output/vanilla_tp1_timings_fixed_step.png"
+filename = "output/vanilla_tp1_timings_fixed_step.pdf"
 savefig(filename)

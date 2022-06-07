@@ -30,15 +30,15 @@ for t = 1:T
       ks = hcat(1:STRIDE:length(ks)*STRIDE, ks)
       k1 = ks[ks[:, 2] .> 0, :]
       k1[1:end, 2] .+= t - 1
-      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :png, color=:red, markersize = 2, legend=false)
+      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :pdf, color=:red, markersize = 2, legend=false)
       k2 = ks[ks[:, 2] .< 0, :]
       k2[1:end, 2] .-= t-1
-      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :png, color=:blue, markersize = 2, legend=false)
+      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :pdf, color=:blue, markersize = 2, legend=false)
     end
 end
 
 
-filename = "output/supermann_warm_start_tp1_ks.png"
+filename = "output/supermann_warm_start_tp1_ks.pdf"
 savefig(filename)
 
 fig = plot(
@@ -57,13 +57,13 @@ for t = 1:T
       ks = hcat(1:STRIDE:length(ks)*STRIDE, ks)
       k1 = ks[ks[:, 2] .> 0, :]
       k1[1:end, 2] .+= t - 1
-      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :png, color=:red, markersize = 2, legend=false)
+      scatter!(k1[1:end, 1], k1[1:end, 2], fmt = :pdf, color=:red, markersize = 2, legend=false)
       k2 = ks[ks[:, 2] .< 0, :]
       k2[1:end, 2] .-= t-1
-      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :png, color=:blue, markersize = 2, legend=false)
+      scatter!(k2[1:end, 1], k2[1:end, 2], fmt = :pdf, color=:blue, markersize = 2, legend=false)
     end
 end
 
 
-filename = "output/supermann_warm_start_tp1_ks_ref.png"
+filename = "output/supermann_warm_start_tp1_ks_ref.pdf"
 savefig(filename)

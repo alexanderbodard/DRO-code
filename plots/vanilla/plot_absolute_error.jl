@@ -27,12 +27,12 @@ for (N_i, N) in enumerate(Ns)
     for i = 1:size(solution)[1]-1
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
-    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=[L"T = %$(N), \alpha = %$(alphas_text[alpha_i])"], yaxis=:log, color=colors[N_i], linestyle=linestyles_text[alpha_i])
+    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=[L"T = %$(N), \alpha = %$(alphas_text[alpha_i])"], yaxis=:log, color=colors[N_i], linestyle=linestyles_text[alpha_i])
   end
 end
 
 
-filename = "output/vanilla_tp1_absolute_error.png"
+filename = "output/vanilla_tp1_absolute_error.pdf"
 savefig(filename)
 
 fig = plot(
@@ -49,12 +49,12 @@ for (N_i, N) in enumerate(Ns)
     for i = 1:size(solution)[1]-1
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
-    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=[L"T = %$(N), \alpha = %$(alphas_text[alpha_i])"], yaxis=:log, color=colors[N_i], linestyle=linestyles_text[alpha_i])
+    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=[L"T = %$(N), \alpha = %$(alphas_text[alpha_i])"], yaxis=:log, color=colors[N_i], linestyle=linestyles_text[alpha_i])
   end
 end
 
 
-filename = "output/vanilla_tp1_absolute_error_zoom.png"
+filename = "output/vanilla_tp1_absolute_error_zoom.pdf"
 savefig(filename)
 
 ######################
@@ -80,12 +80,12 @@ for (N_i, N) in enumerate(Ns)
     for i = 1:size(solution)[1]-1
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
-    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=[L"T = %$(N), r = %$(alpha)"], yaxis=:log, color=colors[N_i], linestyle=linestyles[alpha_i])
+    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=[L"T = %$(N), r = %$(alpha)"], yaxis=:log, color=colors[N_i], linestyle=linestyles[alpha_i])
   end
 end
 
 
-filename = "output/vanilla_tp2_absolute_error.png"
+filename = "output/vanilla_tp2_absolute_error.pdf"
 savefig(filename)
 
 fig = plot(
@@ -102,10 +102,10 @@ for (N_i, N) in enumerate(Ns)
     for i = 1:size(solution)[1]-1
         append!(errs, LA.norm(solution[i, :] .- solution[end, :]) / LA.norm(solution[end, :]))
     end
-    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :png, labels=[L"T = %$(N), r = %$(alpha)"], yaxis=:log, color=colors[N_i], linestyle=linestyles[alpha_i])
+    plot!(1:STRIDE:(size(solution)[1]-1) * STRIDE, errs, fmt = :pdf, labels=[L"T = %$(N), r = %$(alpha)"], yaxis=:log, color=colors[N_i], linestyle=linestyles[alpha_i])
   end
 end
 
 
-filename = "output/vanilla_tp2_absolute_error_zoom.png"
+filename = "output/vanilla_tp2_absolute_error_zoom.pdf"
 savefig(filename)

@@ -11,7 +11,7 @@ Plot the scaling of the parallel implementation
 fig = plot(
   xlabel = L"T",
   ylabel = "Execution time (ms)",
-  fmt = :png,
+  fmt = :pdf,
   legend = false
 )
 
@@ -30,13 +30,13 @@ parallel = readdlm("logs/parallel_timings.txt", ' ')
 plot!(Ns, parallel, yaxis=:log, color=:red, labels = ["Parallel CP"])
 scatter!(Ns, parallel, yaxis=:log, color=:red, labels = [], legend=true)
 
-filename = "output/parallel_vs_sequential.png"
+filename = "output/parallel_vs_sequential.pdf"
 savefig(filename)
 
 fig = plot(
   xlabel = L"T",
   ylabel = "Execution time (ms)",
-  fmt = :png,
+  fmt = :pdf,
   legend = false
 )
 
@@ -52,5 +52,5 @@ parallel = readdlm("logs/parallel_timings.txt", ' ')
 plot!(Ns, parallel - sequential_non_epigraphs, yaxis=:log, color=:red, labels = ["Parallel epigraph projections"])
 scatter!(Ns, parallel - sequential_non_epigraphs, yaxis=:log, color=:red, labels = [], legend=true)
 
-filename = "output/parallel_speedup.png"
+filename = "output/parallel_speedup.pdf"
 savefig(filename)

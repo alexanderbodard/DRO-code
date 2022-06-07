@@ -31,14 +31,14 @@ for t = 1:T
   append!(res, residuals[2:end])
   append!(lengths, length(residuals))
 end
-plot!(1:STRIDE:length(res)*STRIDE, res, fmt = :png, labels=["No warm start"], yaxis=:log, color=:blue)
+plot!(1:STRIDE:length(res)*STRIDE, res, fmt = :pdf, labels=["No warm start"], yaxis=:log, color=:blue)
 
 res = Float64[]
 for t = 1:T
   residuals = readdlm("logs/supermann_tp1_$(t)_residual.dat", ',')
   append!(res, residuals[2:end], residuals[end] * ones(lengths[t] - length(residuals)))
 end
-plot!(1:STRIDE:length(res)*STRIDE, res, fmt = :png, labels=["Warm start"], yaxis=:log, color=:red)
+plot!(1:STRIDE:length(res)*STRIDE, res, fmt = :pdf, labels=["Warm start"], yaxis=:log, color=:red)
 
-filename = "output/supermann_tp1_warm_start.png"
+filename = "output/supermann_tp1_warm_start.pdf"
 savefig(filename)

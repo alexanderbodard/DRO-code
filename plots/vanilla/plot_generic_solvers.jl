@@ -11,7 +11,7 @@ Plot the scaling of the parallel implementation
 fig = plot(
   xlabel = L"T",
   ylabel = "Execution time (ms)",
-  fmt = :png,
+  fmt = :pdf,
   legend = false
 )
 
@@ -43,5 +43,5 @@ scatter!(Ns, cp, yaxis=:log, color=:black, linestyle=:dash, labels = [])
 # plot!(Ns, parallel, yaxis=:log, color=:red, labels = ["Parallel CP"])
 # scatter!(Ns, parallel, yaxis=:log, color=:red, labels = [], legend=true)
 
-filename = "output/generic_solvers.png"
+filename = "output/generic_solvers.pdf"
 savefig(filename)
