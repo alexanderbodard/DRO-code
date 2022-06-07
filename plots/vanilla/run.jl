@@ -13,7 +13,7 @@ Random.seed!(123)
 ### TP1
 ######################
 
-Ns = [3, 5]
+Ns = [3, 5, 7]
 alphas = [0.1, 0.5, 0.9]
 
 global model
@@ -37,7 +37,7 @@ for (N_i, N) in enumerate(Ns)
     )
   end
 end
-"""
+
 # timings
 timings = zeros(length(Ns), length(alphas))
 
@@ -63,7 +63,7 @@ open("output/vanilla_tp1_timings.txt"; write=true) do f
   write(f, "{alpha = 0.1} {alpha = 0.5} {alpha = 0.9}\n")
   writedlm(f, timings[1:end, end:-1:1] * 1e-6, ' ')
 end
-"""
+
 # # Spy plot
 # model, ref_model = get_tp1(3, 0.5)
 # Plots.spy(model.L, legend=nothing)
@@ -132,54 +132,53 @@ end
 ### TP2
 ######################
 
-Ns = [3, 5]
-alphas = [0.1, 0.5, 0.9]
+# Ns = [3, 5]
+# alphas = [0.1, 0.5, 0.9]
 
-global model
+# global model
 
-# Log
-for (N_i, N) in enumerate(Ns)
-  for (alpha_i, alpha) in enumerate(alphas)
-    global model, ref_model = get_tp2(N, alpha)
+# # Log
+# for (N_i, N) in enumerate(Ns)
+#   for (alpha_i, alpha) in enumerate(alphas)
+#     global model, ref_model = get_tp2(N, alpha)
 
-    DRO.solve_model(
-      model, 
-      [1., 1.], 
-      verbose=DRO.PRINT_AND_WRITE, 
-      path = "logs/",
-      filename = "vanilla_tp2_$(N)_$(alpha_i)", 
-      z0=zeros(model.nz), 
-      v0=zeros(model.nv),
-      tol=2e-4,
-      MAX_ITER_COUNT = Int(7.5e5),
-      log_stride = 100
-    )
-  end
-end
-"""
-# timings
-timings = zeros(length(Ns), length(alphas))
+#     DRO.solve_model(
+#       model, 
+#       [1., 1.], 
+#       verbose=DRO.PRINT_AND_WRITE, 
+#       path = "logs/",
+#       filename = "vanilla_tp2_$(N)_$(alpha_i)", 
+#       z0=zeros(model.nz), 
+#       v0=zeros(model.nv),
+#       tol=2e-4,
+#       MAX_ITER_COUNT = Int(7.5e5),
+#       log_stride = 100
+#     )
+#   end
+# end
 
-for (N_i, N) in enumerate(Ns)
-  for (alpha_i, alpha) in enumerate(alphas)
-    global model, ref_model = get_tp2(N, alpha)
+# # timings
+# timings = zeros(length(Ns), length(alphas))
 
-    bt = @benchmark DRO.solve_model(
-      model, 
-      [1., 1.],
-      z0=zeros(model.nz), 
-      v0=zeros(model.nv),
-      tol=1e-6,
-      MAX_ITER_COUNT = Int(7.5e5)
-    )
+# for (N_i, N) in enumerate(Ns)
+#   for (alpha_i, alpha) in enumerate(alphas)
+#     global model, ref_model = get_tp2(N, alpha)
 
-    t = minimum(bt.times)
-    timings[N_i, alpha_i] = t
-  end
-end
+#     bt = @benchmark DRO.solve_model(
+#       model, 
+#       [1., 1.],
+#       z0=zeros(model.nz), 
+#       v0=zeros(model.nv),
+#       tol=1e-6,
+#       MAX_ITER_COUNT = Int(7.5e5)
+#     )
 
-open("output/vanilla_tp2_timings.txt"; write=true) do f
-  write(f, "{alpha = 0.1} {alpha = 0.5} {alpha = 0.9}\n")
-  writedlm(f, timings[1:end, end:-1:1] * 1e-6, ' ')
-end
-"""
+#     t = minimum(bt.times)
+#     timings[N_i, alpha_i] = t
+#   end
+# end
+
+# open("output/vanilla_tp2_timings.txt"; write=true) do f
+#   write(f, "{alpha = 0.1} {alpha = 0.5} {alpha = 0.9}\n")
+#   writedlm(f, timings[1:end, end:-1:1] * 1e-6, ' ')
+# end
